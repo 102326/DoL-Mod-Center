@@ -3,7 +3,7 @@
 [![Latest release](https://img.shields.io/github/v/release/102326/DoL-Mod-Center?label=release)](https://github.com/102326/DoL-Mod-Center/releases/latest)
 [![License](https://img.shields.io/github/license/102326/DoL-Mod-Center)](https://github.com/102326/DoL-Mod-Center/blob/main/LICENSE)
 
-面向 **Degrees of Lewdity ModLoader** 的本地模组管理器。它帮助你在游戏内整理本地 ZIP、查看运行诊断、保存配置快照，并在需要时备份与恢复本地模组配置及包体。项目坚持离线工作：没有在线市场，也不会自动下载或安装模组。
+面向 **Degrees of Lewdity ModLoader** 的本地模组管理器。在本地完成模组整理、运行诊断、配置快照，以及本地模组配置与包体的备份恢复。
 
 > [!TIP]
 > 第一次使用前，请先保留游戏存档和重要模组包的独立副本。先看[安装说明](#安装与依赖)和[备份边界](#备份边界)，再导入 ZIP。
@@ -35,7 +35,7 @@
 3. 在 ModLoader 中导入 ZIP，替换同名的 DoL Mod Center，然后重启游戏。
 4. 从游戏侧栏的“模组中心”入口打开管理器。
 
-当前已验证的写入适配为 **ModLoader 2.101.1**；其他版本可能只能查看，无法安全写入。管理器包不包含游戏、存档、签名材料或第三方内容模组。
+当前已验证的写入适配为 **ModLoader 2.101.1**；其他版本可能只能查看，无法安全写入。
 
 ## 使用
 
@@ -71,4 +71,4 @@
 - [最新发行版](https://github.com/102326/DoL-Mod-Center/releases/latest)
 - [问题反馈](https://github.com/102326/DoL-Mod-Center/issues)
 
-DoL、ModLoader 及其他第三方项目仍归其各自作者所有。本仓库只分发管理器源码与构建所需文件，不分发游戏内容。
+DoL、ModLoader 及其他第三方项目归其各自作者所有。
