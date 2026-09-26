@@ -31,7 +31,7 @@
 ## 安装与依赖
 
 1. 从 [Latest release](https://github.com/102326/DoL-Mod-Center/releases/latest) 下载 `DoLModCenter-2.0.0.mod.zip`。
-2. 确认游戏已经安装并启用 **ModLoader**。本项目不要求 maplebirch 或 ModHub，也不会替你获取模组。
+2. 确认游戏已经安装并启用 **ModLoader**。
 3. 在 ModLoader 中导入 ZIP，替换同名的 DoL Mod Center，然后重启游戏。
 4. 从游戏侧栏的“模组中心”入口打开管理器。
 
