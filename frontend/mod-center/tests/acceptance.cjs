@@ -17,6 +17,20 @@ const root=path.resolve(__dirname,'..'),old=path.resolve(root,'../../mods/mod-ce
  const handle=ui.getByRole('button',{name:'调整顺序：Alpha Content',exact:true});await handle.focus();await handle.press('Space');await handle.press('ArrowDown');await handle.press('Enter');
  await page.waitForFunction(async()=>JSON.stringify((await DMCStorage.create().read()).enabled)==='["Beta Theme","Alpha Content"]');
  await page.waitForFunction(()=>document.querySelector('.next-list .next-name').textContent==='Beta Theme');assert.equal(await ui.locator('.next-list article').count(),2);
+ // Undo uses the exact saved catalog and preserves package bytes.
+ await ui.getByRole('button',{name:'撤销排序',exact:true}).click();
+ await page.waitForFunction(async()=>JSON.stringify((await DMCStorage.create().read()).enabled)==='["Alpha Content","Beta Theme"]');
+ await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);
+ await handle.focus();await handle.press('Space');await handle.press('ArrowDown');await handle.press('Enter');
+ await page.waitForFunction(()=>document.querySelector('.next-list .next-name').textContent==='Beta Theme');
+ await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);
+ // External config mutation makes the undo token stale and must not be overwritten.
+ await page.evaluate(async()=>{const api=DMCStorage.create();await api.toggle(await api.read(),'Gamma Disabled',true)});
+ await ui.getByRole('button',{name:'撤销排序',exact:true}).click();
+ await ui.locator('.next-notice.failure').waitFor();
+ assert.ok(await page.evaluate(async()=>(await DMCStorage.create().read()).enabled.includes('Gamma Disabled')));
+ await page.evaluate(async()=>{const api=DMCStorage.create();await api.toggle(await api.read(),'Gamma Disabled',false)});
+ await ui.getByRole('button',{name:'刷新',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);
  // Touch pointer reorder follows the same no-confirm path.
  await page.evaluate(()=>{const h=document.querySelector('.next-list .dmc-drag-handle'),cards=document.querySelectorAll('.next-list article'),a=h.getBoundingClientRect(),b=cards[1].getBoundingClientRect();const opts={bubbles:true,pointerId:42,pointerType:'touch',isPrimary:true,button:0,buttons:1,clientX:a.x+15,clientY:a.y+15};h.dispatchEvent(new PointerEvent('pointerdown',opts));h.dispatchEvent(new PointerEvent('pointermove',{...opts,clientY:b.bottom-5}));h.dispatchEvent(new PointerEvent('pointerup',{...opts,buttons:0,clientY:b.bottom-5}))});
  await page.waitForFunction(async()=>JSON.stringify((await DMCStorage.create().read()).enabled)==='["Alpha Content","Beta Theme"]');
@@ -29,7 +43,7 @@ const root=path.resolve(__dirname,'..'),old=path.resolve(root,'../../mods/mod-ce
  // Native ZIP download/restore via reused backup flow inside Vue.
  await ui.getByRole('button',{name:/备份与恢复/}).click();const wait=page.waitForEvent('download');await ui.getByRole('button',{name:'导出当前完整备份',exact:true}).click();const saved=await(await wait).path();assert.equal(JSON.parse(fs.readFileSync(saved,'utf8')).schema,'DoLModCenter.full.v2');
  await ui.getByLabel('选择完整备份').setInputFiles(saved);await ui.getByText('校验通过。确认后整体替换；生效需要重启。',{exact:true}).waitFor();await ui.getByLabel('已保存刚导出的当前备份',{exact:false}).check();await ui.getByRole('button',{name:'恢复这份备份',exact:true}).click();await ui.getByText('恢复已提交并回读核验。请重启游戏，当前会话仍是恢复前的模组。',{exact:true}).waitFor();
- for(const name of [/运行诊断/,/配置快照/,/美化图层/]){await ui.getByRole('button',{name}).first().click();assert.ok(await ui.isVisible())}
+ await ui.locator('summary').filter({hasText:'配置快照（保存常用搭配）'}).click();await ui.getByRole('button',{name:/诊断助手/}).click();await ui.getByRole('button',{name:'开始检查',exact:true}).click();await ui.getByRole('button',{name:/本地模组/}).click();await ui.getByRole('button',{name:'美化图层',exact:true}).click();await ui.getByRole('button',{name:'模组列表',exact:true}).click();
  await ui.getByRole('button',{name:/本地模组/}).click();await ui.getByRole('button',{name:'刷新',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);
  // Responsive and reduced-motion acceptance, CSS viewport includes tablet at DPR 2.
  fs.mkdirSync(path.join(__dirname,'artifacts'),{recursive:true});
@@ -38,7 +52,7 @@ const root=path.resolve(__dirname,'..'),old=path.resolve(root,'../../mods/mod-ce
   const geometry=await ui.evaluate(el=>{const r=el.getBoundingClientRect(),p=el.querySelector('.next-window').getBoundingClientRect(),s=el.querySelector('.next-scroll');return{fits:p.left>=0&&p.right<=innerWidth+1&&p.top>=0&&p.bottom<=innerHeight+1,overflow:s.scrollWidth>s.clientWidth+2,height:s.clientHeight}});assert.ok(geometry.fits,name+' window');assert.ok(!geometry.overflow,name+' horizontal overflow');assert.ok(geometry.height>60,name+' content visible');
  }
  await page.setViewportSize({width:390,height:844});
- for(const id of ['diagnostics','backups','profiles','beauty']){await page.evaluate(id=>{const buttons=[...document.querySelectorAll('.next-nav button')];buttons[['local','diagnostics','backups','profiles','beauty'].indexOf(id)].click()},id);const metrics=await ui.locator('.next-scroll').evaluate(e=>[e.scrollWidth,e.clientWidth]);assert.ok(metrics[0]<=metrics[1]+2,id+' mobile overflow');}
+ for(const name of ['诊断助手','备份与恢复','本地模组']){await ui.locator('.next-nav').getByRole('button',{name:new RegExp(name)}).click();const metrics=await ui.locator('.next-scroll').evaluate(e=>[e.scrollWidth,e.clientWidth]);assert.ok(metrics[0]<=metrics[1]+2,name+' mobile overflow');}
  await ui.getByRole('button',{name:/本地模组/}).click();
  assert.equal(await page.locator('.dmc-panel,.dmc-shell').count(),0,'classic shell is not mounted');assert.equal(await page.getByRole('button',{name:/经典界面|打开新版界面/}).count(),0);await page.evaluate(()=>DoLModCenter.close());assert.equal(await ui.isVisible(),false);await page.evaluate(()=>DoLModCenter.open());assert.equal(await ui.isVisible(),true);
  await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);await page.keyboard.press('Escape');assert.equal(await ui.isVisible(),false);await page.locator('#dmc-sidebar-button').click();await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);await page.evaluate(()=>document.dispatchEvent(new Event('backbutton',{cancelable:true})));assert.equal(await ui.isVisible(),false);

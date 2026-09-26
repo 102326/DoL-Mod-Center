@@ -92,7 +92,7 @@
       '只收集模组元数据与错误摘要，不读取存档变量；诊断导出前请查看内容。']));
     const report = diag.makeReport({groups, conflicts, mods, notes: safeNotes});
     const advice = result.issues.map(i => [clean(i.title), '证据：' + clean(i.evidence), '建议：' + clean(i.advice)].join('\n')).join('\n\n');
-    lastReport = ('DoL 模组中心 1.3.0\n\n' + advice + '\n\n' + report).slice(0, 80000);
+    lastReport = ('DoL 模组中心 2.1.0\n\n' + advice + '\n\n' + report).slice(0, 80000);
     return {mods, groups, conflicts, notes: safeNotes, issues: result.issues, incomplete};
   }
   function issueCard(issue) {
@@ -259,7 +259,7 @@
     current = snapshot(); render();
     return panel;
   };
-  root.DMCDiagnostics = {getReport(){snapshot();return lastReport+'\n\n最近变更（不代表报错原因）：\n'+JSON.stringify(root.DMCJournal?.list?.()||[])+'\n'+(root.DMCJournal?.status?.()||'');},mount: root.dmcMountDiagnostics, refresh() { current = snapshot(); if (panel?.isConnected) render(); }, destroy() {
+  root.DMCDiagnostics = {snapshot,getReport(){snapshot();return lastReport+'\n\n最近变更（不代表报错原因）：\n'+JSON.stringify(root.DMCJournal?.list?.()||[])+'\n'+(root.DMCJournal?.status?.()||'');},mount: root.dmcMountDiagnostics, refresh() { current = snapshot(); if (panel?.isConnected) render(); }, destroy() {
     destroyed = true; observer?.disconnect(); clearTimeout(timer); events.forEach(off => off());
     if (root.jQuery && jqueryAttached) root.jQuery(document).off('.dolWorkbench');
     urls.forEach(url => URL.revokeObjectURL(url)); urls.clear(); panel?.remove(); panel = null; mountContainer = null; delete root.DMCDiagnostics; delete root.dmcMountDiagnostics;

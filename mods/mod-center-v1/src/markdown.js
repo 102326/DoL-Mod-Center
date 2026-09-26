@@ -6,6 +6,7 @@
   var MAX_LINES = 4000;
   var MAX_NODES = 12000;
   var MAX_DEPTH = 24;
+  var MAX_SCANS = 2000000;
 
   function add(parent, tag, text, className, state) {
     if (!parent || !parent.ownerDocument) { state.truncated = true; return null; }
@@ -27,7 +28,90 @@
     state.nodes += 1;
   }
 
-  function inline(parent, source, state, depth) {
+  function referenceKey(value) {
+    return value.trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function safeWebUrl(value) {
+    if (!value || /[\u0000-\u001f\u007f]/.test(value)) return '';
+    try {
+      var url = new URL(value);
+      return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password ? url.href : '';
+    } catch (_) { return ''; }
+  }
+
+  function closing(source, start, open, close, state) {
+    var level = 0;
+    for (var j = start; j < source.length; j += 1) {
+      if (++state.scans > MAX_SCANS) { state.truncated = true; return -1; }
+      if (source[j] === '\\') { j += 1; continue; }
+      if (source[j] === open) level += 1;
+      if (source[j] === close && --level === 0) return j;
+    }
+    return -1;
+  }
+
+  function target(source, end, references, label, state) {
+    if (source[end + 1] === '(') {
+      var close = closing(source, end + 1, '(', ')', state);
+      if (close < 0) return null;
+      var raw = source.slice(end + 2, close).trim();
+      var match = raw.match(/^<([^>]+)>(?:\s+.*)?$/) || raw.match(/^(\S+?)(?:\s+[\"'][^\n]*[\"'])?$/);
+      return match ? { url: match[1], end: close + 1 } : null;
+    }
+    if (source[end + 1] === '[') {
+      var refEnd = closing(source, end + 1, '[', ']', state);
+      if (refEnd < 0) return null;
+      var id = source.slice(end + 2, refEnd) || label;
+      return references[referenceKey(id)] ? { url: references[referenceKey(id)], end: refEnd + 1 } : null;
+    }
+    return references[referenceKey(label)] ? { url: references[referenceKey(label)], end: end + 1 } : null;
+  }
+
+  function image(parent, alt, url, state, inLink) {
+    var caption = alt.trim() || '图片';
+    var safe = safeWebUrl(url);
+    if (!safe || inLink) {
+      var badge = add(parent, 'span', caption, 'dmc-md-image-placeholder', state);
+      if (badge) badge.title = safe ? '图片：' + safe : '包内或不支持的图片路径：' + url;
+      return;
+    }
+    var button = add(parent, 'button', '查看图片：' + caption, 'dmc-md-image-load', state);
+    if (!button) return;
+    button.type = 'button';
+    button.title = '点击后从外部加载图片：' + safe;
+    button.addEventListener('click', function () {
+      var picture = button.ownerDocument.createElement('img');
+      picture.className = 'dmc-md-image';
+      picture.alt = caption;
+      picture.loading = 'lazy';
+      picture.decoding = 'async';
+      picture.referrerPolicy = 'no-referrer';
+      picture.addEventListener('error', function () {
+        if (picture.parentNode) picture.parentNode.replaceChild(button, picture);
+        button.textContent = '图片加载失败，重试：' + caption;
+      }, { once: true });
+      button.parentNode.replaceChild(picture, button);
+      picture.src = safe;
+    });
+  }
+
+  function link(parent, label, url, state, depth) {
+    var safe = safeWebUrl(url);
+    var node = add(parent, safe ? 'a' : 'span', undefined, safe ? 'dmc-md-link' : 'dmc-md-local-link', state);
+    if (!node) return;
+    if (safe) {
+      node.href = safe;
+      node.target = '_blank';
+      node.rel = 'noopener noreferrer nofollow';
+      node.referrerPolicy = 'no-referrer';
+    } else {
+      node.title = '包内或不支持的链接路径：' + url;
+    }
+    inline(node, label, state, depth + 1, true);
+  }
+
+  function inline(parent, source, state, depth, inLink) {
     depth = depth || 0;
     if (!parent || !parent.ownerDocument) { state.truncated = true; return; }
     if (depth > MAX_DEPTH) { text(parent, source, state); state.truncated = true; return; }
@@ -39,29 +123,26 @@
       return end > i + open.length ? end : -1;
     }
     while (i < source.length && state.nodes < MAX_NODES) {
+      if (state.scans > MAX_SCANS) { text(parent, source.slice(i), state); break; }
       if (source[i] === '`') {
         var codeEnd = paired('`', '`');
         if (codeEnd >= 0) { flush(); var code = add(parent, 'code', source.slice(i + 1, codeEnd), 'dmc-md-inline-code', state); i = codeEnd + 1; continue; }
       }
-      if (source.slice(i, i + 2) === '![') {
-        var imageEnd = source.indexOf(']', i + 2);
-        var imageClose = imageEnd >= 0 && source[imageEnd + 1] === '(' ? source.indexOf(')', imageEnd + 2) : -1;
-        if (imageClose > imageEnd) {
-          flush();
-          add(parent, 'span', '[图片: ' + source.slice(i + 2, imageEnd) + ']', 'dmc-md-image-placeholder', state);
-          i = imageClose + 1;
-          continue;
-        }
-      }
-      if (source[i] === '[') {
-        var linkEnd = source.indexOf(']', i + 1);
-        var linkClose = linkEnd >= 0 && source[linkEnd + 1] === '(' ? source.indexOf(')', linkEnd + 2) : -1;
-        if (linkClose > linkEnd) {
-          flush();
-          var link = add(parent, 'span', source.slice(i + 1, linkEnd), 'dmc-md-link', state);
-          if (link) text(link, ' (' + source.slice(linkEnd + 2, linkClose) + ')', state);
-          i = linkClose + 1;
-          continue;
+      var isImage = source.slice(i, i + 2) === '![';
+      if (isImage || source[i] === '[') {
+        var open = i + (isImage ? 1 : 0);
+        var end = closing(source, open, '[', ']', state);
+        if (end >= 0) {
+          var label = source.slice(open + 1, end);
+          var destination = target(source, end, state.references, label, state);
+          if (destination) {
+            flush();
+            if (isImage) image(parent, label, destination.url, state, inLink);
+            else if (!inLink) link(parent, label, destination.url, state, depth);
+            else inline(parent, label, state, depth + 1, true);
+            i = destination.end;
+            continue;
+          }
         }
       }
       var matched = false;
@@ -73,7 +154,7 @@
           if (markEnd >= 0) {
             flush();
             var styled = add(parent, mark[2], undefined, 'dmc-md-' + mark[2], state);
-            if (styled) inline(styled, source.slice(i + mark[0].length, markEnd), state, depth + 1);
+            if (styled) inline(styled, source.slice(i + mark[0].length, markEnd), state, depth + 1, inLink);
             i = markEnd + mark[1].length;
             matched = true;
             break;
@@ -157,15 +238,39 @@
     return value.split('|').map(function (cell) { return cell.trim(); });
   }
 
+  function collectReferences(lines) {
+    var references = Object.create(null);
+    var visible = [];
+    var fenced = false;
+    var count = 0;
+    lines.forEach(function (line) {
+      if (/^\s*```/.test(line)) { fenced = !fenced; visible.push(line); return; }
+      if (!fenced) {
+        var match = line.match(/^\s{0,3}\[([^\]\n]+)\]:\s*(?:<([^>]+)>|(\S+))(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*$/);
+        if (match && count < 1024) {
+          var key = referenceKey(match[1]);
+          if (key && !Object.prototype.hasOwnProperty.call(references, key)) {
+            references[key] = match[2] || match[3];
+            count += 1;
+          }
+          return;
+        }
+      }
+      visible.push(line);
+    });
+    return { references: references, lines: visible };
+  }
+
   function render(container, source) {
     if (!container || !container.ownerDocument) throw new TypeError('container must be a DOM element');
     var input = String(source == null ? '' : source);
     var truncated = input.length > MAX_INPUT;
     if (truncated) input = input.slice(0, MAX_INPUT);
     var lines = input.replace(/\r\n?/g, '\n').split('\n').slice(0, MAX_LINES);
+    var extracted = collectReferences(lines);
     while (container.firstChild) container.removeChild(container.firstChild);
-    var state = { nodes: 0, truncated: truncated || lines.length >= MAX_LINES };
-    blocks(container, lines, state, 0);
+    var state = { nodes: 0, scans: 0, truncated: truncated || lines.length >= MAX_LINES, references: extracted.references };
+    blocks(container, extracted.lines, state, 0);
     if (state.truncated) {
       var notice = container.ownerDocument.createElement('p');
       notice.className = 'dmc-md-truncated';
@@ -176,5 +281,5 @@
     return { nodes: state.nodes, truncated: state.truncated };
   }
 
-  root.DMCMarkdown = { render: render, limits: { maxInput: MAX_INPUT, maxLines: MAX_LINES, maxNodes: MAX_NODES, maxDepth: MAX_DEPTH } };
+  root.DMCMarkdown = { render: render, limits: { maxInput: MAX_INPUT, maxLines: MAX_LINES, maxNodes: MAX_NODES, maxDepth: MAX_DEPTH, maxScans: MAX_SCANS } };
 }(typeof window !== 'undefined' ? window : this));

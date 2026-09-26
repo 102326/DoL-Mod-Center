@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict');const a=require('../src/diagnostic-assistant.js');
+const p=(name,version,deps=[],alias=[])=>({name,version,bootJson:{name,version,alias,dependenceInfo:deps}});const dep=(modName,version='*')=>({modName,version});
+let state={enabled:['A','B'],disabled:['D'],preloaded:[{name:'P',version:'1',from:'Local'}]};let catalog={items:[p('A','1',[dep('B'),dep('P'),dep('D'),dep('M')]),p('B','1'),p('D','1')]};let f=a.analyze({state,catalog});assert.ok(f.some(x=>x.id.startsWith('disabled:A:D')));assert.ok(f.some(x=>x.id.startsWith('missing:A:M')));assert.equal(a.dependents('B',{state,catalog}).includes('A'),true);
+catalog.items=[p('A','1',[dep('Alias')]),p('B','1',[],['Alias'])];assert.equal(a.analyze({state:{enabled:['A','B']},catalog,checkVersion:()=>undefined}).some(x=>x.certainty==='unknown'),true);
+catalog.items=[p('A','1',[dep('B','2')]),p('B','1')];assert.equal(a.analyze({state:{enabled:['A','B']},catalog,checkVersion:()=>false}).some(x=>x.id.startsWith('version:A:B')),true);
+catalog.items=[p('A','1',[dep('B')]),p('B','1')];assert.equal(a.analyze({state:{enabled:['A','B']},catalog}).some(x=>x.id.startsWith('order:A:B')),true);assert.deepEqual(a.dependents('A',{state:{enabled:['A']},catalog}),[]);
+let changes=[{kind:'toggle',names:['A'],time:'now'}];let c=a.analyze({state:{enabled:['A']},catalog,logs:[{level:'error',message:'TypeError',count:2}],changes});assert.equal(c.find(x=>x.id.startsWith('change-correlation:')).certainty,'possible');
+assert.ok(a.analyze({state:{enabled:['A'],missing:['Ghost']},catalog}).some(x=>x.id==='missing-package:Ghost'));
+assert.ok(a.analyze({state:{enabled:['A']},catalog:null}).some(x=>x.certainty==='unknown'));
+let ambiguous={items:[p('A','1',[dep('Alias')]),p('B','1',[],['Alias']),p('C','1',[],['Alias'])]};assert.ok(a.analyze({state:{enabled:['A','B','C']},catalog:ambiguous}).some(x=>x.id.startsWith('ambiguous:')));
+let loaderCatalog={items:[p('A','1',[dep('ModLoader','2')])]};let loader=a.analyze({state:{enabled:['A']},catalog:loaderCatalog,loaderVersion:'1',checkVersion:()=>false});assert.ok(loader.some(x=>x.id.startsWith('loader-mismatch:')));
+let logOnly=a.analyze({state:{enabled:['A']},catalog,logs:[{level:'warn',message:'bad'}]});let logFinding=logOnly.find(x=>x.id.startsWith('log:'));assert.equal(logFinding.certainty,'confirmed');assert.equal(logFinding.suggestion.includes('不据此归责'),true);
+assert.deepEqual(a.dependents('B',{state:{enabled:['A'],disabled:['C']},catalog:{items:[p('A','1',[dep('B')]),p('B','1'),p('C','1',[dep('B')])]}}),['A']);
+console.log('diagnostic assistant tests passed');
+
+const gameCatalog={items:[p('A','1',[dep('GameVersion','=0.5.11.9')]),p('B','1',[dep('GameVersion','>=0.5.11.9')])]};
+const gameState={enabled:['A','B'],preloaded:[{name:'ModI18N',version:'1',from:'Local'}]};
+assert.equal(a.analyze({state:gameState,catalog:gameCatalog}).filter(x=>x.id==='game-version-unknown').length,1);
+assert.deepEqual(a.analyze({state:gameState,catalog:gameCatalog,gameVersion:'0.5.11.9',checkVersion:()=>true}),[]);
+assert.equal(a.analyze({state:gameState,catalog:gameCatalog,gameVersion:'0.5.10.0',checkVersion:()=>false}).filter(x=>x.id.startsWith('game-mismatch:')).length,2);
+assert.equal(a.gameVersion({StartConfig:{version:'0.5.11.9'},get State(){throw Error('must not read saves')}}),'0.5.11.9');
+assert.equal(a.gameVersion({StartConfig:{version:'unknown'}}),undefined);
+assert.equal(a.analyze({state:{enabled:['A'],preloaded:[{name:'P',version:'1',from:'Local'}]},catalog:{items:[p('A','1',[dep('P')])]},checkVersion:()=>true}).length,0);
+console.log('PASS game metadata, matching/mismatch/unknown aggregation, trusted preload');

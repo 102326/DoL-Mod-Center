@@ -1,0 +1,33 @@
+const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),{pathToFileURL}=require('node:url'),{chromium}=require('playwright');
+(async()=>{const browser=await chromium.launch({headless:true,channel:'msedge'});try{
+ const page=await browser.newPage({viewport:{width:1704,height:1136}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const uiRoot=path.resolve(__dirname,'../../../frontend/mod-center');
+ await page.goto(pathToFileURL(path.join(uiRoot,'tests/demo.html')).href);await page.waitForFunction(()=>__fixtureReady);
+ await page.addStyleTag({path:path.join(uiRoot,'dist/ui.css')});await page.addScriptTag({path:path.join(uiRoot,'dist/ui.js')});await page.locator('#dmc-sidebar-button').click();
+ await page.waitForFunction(()=>!document.querySelector('.next-toolbar .primary').disabled);
+ const order=()=>page.evaluate(async()=>(await DMCStorage.create().read()).enabled);
+ const original=await order();assert.ok(original.length>=2);
+ const handles=page.locator('.next-list .dmc-drag-handle'),cards=page.locator('.next-list article');
+ async function start(){const h=await handles.first().boundingBox(),b=await cards.nth(1).boundingBox();await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2,b.y+b.height-5,{steps:10});}
+ await start();await page.locator('.dmc-drag-ghost').waitFor();assert.deepEqual(await order(),original,'no writes during movement');
+ assert.equal(await page.locator('.dmc-drag-ghost .next-index').textContent(),'2');assert.deepEqual(await cards.locator('.next-index').allTextContents(),['1','2']);
+ assert.equal(await page.locator('.dmc-drag-ghost[id],.dmc-drag-ghost [id]').count(),0);
+ const ghost=await page.locator('.dmc-drag-ghost').boundingBox();await page.mouse.move(ghost.x+40,ghost.y+40);assert.equal(await page.locator('.dmc-drag-ghost').count(),1,'capture remains active');
+ fs.mkdirSync(path.join(uiRoot,'tests/artifacts'),{recursive:true});await page.screenshot({path:path.join(uiRoot,'tests/artifacts/drag-glass-tablet.png')});
+ await page.keyboard.press('Escape');await page.mouse.up();assert.equal(await page.locator('.dmc-drag-ghost').count(),0);assert.deepEqual(await order(),original);assert.ok(await page.locator('.dmc-next').isVisible());
+ await start();await page.mouse.up();await page.waitForFunction(async first=>(await DMCStorage.create().read()).enabled[1]===first,original[0]);
+ await page.getByRole('button',{name:'撤销排序',exact:true}).click();await page.waitForFunction(async first=>(await DMCStorage.create().read()).enabled[0]===first,original[0]);
+ await page.waitForFunction(()=>!document.querySelector('.next-toolbar .primary').disabled);
+ await page.emulateMedia({reducedMotion:'reduce'});await start();assert.equal(await page.locator('.dmc-drag-ghost').evaluate(e=>getComputedStyle(e).backdropFilter),'none');await page.keyboard.press('Escape');await page.mouse.up();
+ assert.equal(await cards.evaluateAll(xs=>xs.some(x=>x.style.opacity||x.style.transform)),false,'cancel styles clean');assert.deepEqual(await cards.evaluateAll(xs=>xs.map(x=>x.dataset.orderName)),await order(),'DOM matches persisted order after undo and cancel');
+ await page.getByLabel('搜索模组').fill(original[0]);assert.ok(await handles.first().isDisabled());await page.getByLabel('搜索模组').fill('');
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(uiRoot,'tests/artifacts/drag-glass-phone.png')});
+ await page.evaluate(async()=>{const names=['A','B',...Array.from({length:24},(_,i)=>'Long'+i)];await __fixture.seed([['enabled-custom',JSON.stringify(names)],...names.slice(2).map(n=>['fixture-package:'+n,__fixture.pack(n)])]);});
+ await page.getByRole('button',{name:'刷新',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.next-list article').length===26);
+ await handles.first().scrollIntoViewIfNeeded();const th=await handles.first().boundingBox(),sc=await page.locator('.next-scroll').boundingBox(),startScroll=await page.locator('.next-scroll').evaluate(e=>e.scrollTop),cdp=await page.context().newCDPSession(page);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:th.x+12,y:th.y+12}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:th.x+12,y:sc.y+sc.height-10}]});
+ await page.waitForFunction(n=>document.querySelector('.next-scroll').scrollTop>n+120,startScroll);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});assert.equal(await page.locator('.dmc-drag-ghost').count(),0);assert.equal((await order())[0],'A');await cdp.detach();
+ assert.deepEqual(errors,[]);await page.evaluate(()=>{DoLModCenter.destroy();return __fixture.cleanup()});console.log('PASS real pointer ghost/live numbers/no early writes, Escape, undo, reduced motion, filtered lock, touch edge scrolling and cancel');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

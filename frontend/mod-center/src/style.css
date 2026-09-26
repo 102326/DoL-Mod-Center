@@ -1,7 +1,7 @@
 @import "tailwindcss/theme.css" layer(theme) prefix(mc);
 @import "tailwindcss/utilities.css" layer(utilities) prefix(mc);
 @source "./*.vue";
-.dmc-next{position:fixed;inset:0;z-index:100050;background:#09090dbb;backdrop-filter:blur(8px);padding:clamp(8px,2vw,32px);color:#e4e4e9;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:left;color-scheme:dark}
+.dmc-next{position:fixed;inset:0;z-index:100050;background:#09090df2;padding:clamp(8px,2vw,32px);color:#e4e4e9;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:left;color-scheme:dark}
 .dmc-next[style*="display: none"]{pointer-events:none}
 .dmc-next *{box-sizing:border-box}.dmc-next [hidden]{display:none!important}
 .dmc-next button,.dmc-next input,.dmc-next select{font:inherit;letter-spacing:normal;max-width:100%;border:1px solid #3c3c48;border-radius:12px;background:#292930;color:#e4e4e9;min-height:44px;padding:10px 14px;box-shadow:none;text-transform:none;cursor:pointer;transition:background .16s,border-color .16s,box-shadow .16s,transform .12s}
@@ -17,7 +17,7 @@
 @keyframes mc-enter{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
 @media(min-width:1800px){.dmc-next{font-size:16px}.next-window{max-width:1720px;grid-template-columns:250px minmax(0,1fr)}.next-card{padding:18px!important}}
 @media(max-width:760px){.dmc-next{padding:0}.next-window{border-radius:0;border:0;grid-template-columns:1fr}.next-nav{padding:0;border-right:0;border-bottom:1px solid #303038;display:block}.next-brand{display:none}.next-nav nav{flex-direction:row;overflow:auto;gap:0;padding:6px}.next-nav nav button{width:auto;flex:0 0 auto;gap:6px;padding:8px 10px;font-size:12px}.next-nav nav small{display:none}.next-nav nav button>span{font-size:16px;width:auto}.next-main{overflow:hidden}.next-window{grid-template-rows:auto minmax(0,1fr)}.next-main>header{padding:16px 16px 10px}.next-main h2{font-size:22px}.next-notice{padding:6px 16px}.next-scroll{padding:16px}.next-main footer{padding:8px 16px}.next-overview{gap:7px;margin-bottom:16px}.next-overview>div{padding:10px}.next-overview strong{font-size:22px}.next-overview small{font-size:10px}.dmc-next .next-card{flex-wrap:wrap;gap:7px;padding:12px}.next-actions{width:100%;justify-content:flex-end}.next-card-info{min-width:calc(100% - 78px)}.next-toolbar input[type=search]{width:100%;flex-basis:100%}.next-confirm{padding:12px 16px}.next-nav .selected{border-radius:9px}.next-detail{font-size:13px}}
-@media(prefers-reduced-motion:reduce){.dmc-next *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(prefers-reduced-motion:reduce){.dmc-next *{animation:none!important;transition:none!important;scroll-behavior:auto!important}.dmc-next .dmc-drag-ghost{transform:none!important}}
 
 /* Keep legacy diagnostics and beauty views on the 2.0 charcoal/lavender system. */
 .dmc-next .next-legacy .dmc-card{background:#222229;border-color:#3a3948;color:#e4e4e9;border-radius:16px}
@@ -44,3 +44,16 @@
 .dmc-next-error{position:fixed;inset:auto 16px 16px;z-index:100060;max-width:480px;margin-left:auto;padding:18px 20px;border:1px solid #6b5260;border-radius:16px;background:#211a22;color:#f1e8ed;box-shadow:0 18px 60px #000b;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}.dmc-next-error strong{display:block;font-size:16px}.dmc-next-error p{margin:8px 0 14px;color:#d0bdc5}.dmc-next-error button{margin-right:8px;border:1px solid #5b5263;border-radius:10px;background:#302b36;color:#f1e8ed;min-height:40px;padding:8px 14px;cursor:pointer}.dmc-next-error button:hover{background:#403747}.next-scroll{padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
 
 .dmc-next .next-legacy input[type=checkbox],.dmc-next .next-legacy input[type=radio],.dmc-next #dwb-panel input[type=checkbox],.dmc-next #dwb-panel input[type=radio]{min-height:0;padding:0;accent-color:#c4c7f5}
+
+.dmc-next .next-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}.dmc-next .next-toolbar [aria-pressed=true]{background:#3b374e;border-color:#aaa1d8}.dmc-next .next-finding,.dmc-next .next-recovery{display:block;overflow-wrap:anywhere}.dmc-next .next-finding h3{margin:10px 0}.dmc-next .next-confirm p{white-space:pre-wrap;max-height:45vh;overflow:auto}.dmc-next summary{cursor:pointer;padding:12px 0}.dmc-next .next-assistant input{min-width:0;max-width:100%}.dmc-next .next-recovery [role=alertdialog]{border-top:1px solid #565066;padding-top:12px}.dmc-next .next-recovery button{margin:4px}.dmc-next .next-finding p{white-space:pre-wrap}
+
+/* Local glass layers: only the active drag and transient toast use backdrop blur. */
+.dmc-drag-ghost{position:fixed!important;z-index:100080!important;pointer-events:none!important;box-sizing:border-box;overflow:hidden;margin:0!important;border:1px solid #c8bfff99!important;border-radius:16px;background:linear-gradient(125deg,#454150ed,#242330f5)!important;box-shadow:0 22px 50px #0008,0 0 0 1px #d5caff22 inset!important;opacity:.97;will-change:left,top;color:#eceaf4;font:14px/1.5 system-ui}
+.dmc-drag-ghost::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 10%,#fff1 40%,transparent 65%);animation:mc-glass-sweep .45s ease-out both}
+.dmc-next .dmc-drag-ghost .next-actions{opacity:.5}.dmc-next .dmc-drag-ghost .next-index{color:#ded6ff;font-weight:700}
+.dmc-next .next-sort-toast{position:fixed;z-index:100075;right:max(28px,env(safe-area-inset-right));bottom:max(48px,env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px;max-width:calc(100vw - 32px);padding:10px 12px 10px 20px;border:1px solid #c8bfff66;border-radius:18px;background:#2b2937f5;box-shadow:0 12px 36px #0007;animation:mc-enter .18s ease-out}
+.dmc-next .next-sort-toast button{background:#ffffff0a}.dmc-next .next-sort-toast button:first-of-type{color:#ded6ff;border-color:#a79bc766}
+@supports(backdrop-filter:blur(8px)){.dmc-drag-ghost{background:linear-gradient(125deg,#454150cc,#242330dc)!important;backdrop-filter:blur(8px)}.dmc-next .next-sort-toast{background:#2b2937d9;backdrop-filter:blur(8px)}}
+@keyframes mc-glass-sweep{from{opacity:0;transform:translateX(-20%)}to{opacity:1;transform:translateX(0)}}
+@media(max-width:600px){.dmc-next .next-sort-toast{right:16px;bottom:max(20px,env(safe-area-inset-bottom));gap:8px;padding:8px 10px 8px 14px}}
+@media(prefers-reduced-motion:reduce){.dmc-next button,.dmc-next .next-sort-toast,.dmc-drag-ghost,.dmc-drag-ghost::after{animation:none!important;transition:none!important}.dmc-next button:active:not(:disabled){transform:none}.dmc-drag-ghost,.dmc-next .next-sort-toast{backdrop-filter:none!important}}

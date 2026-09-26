@@ -1,6 +1,6 @@
 (function(root){
  'use strict';
- const KEY='DoLModCenter.changes.v1',labels={install:'导入／更新',remove:'删除',toggle:'启停',move:'拖拽排序',reorderCatalog:'按前置排序',restore:'恢复完整备份',disableAll:'停用全部旁加载模组'};
+ const KEY='DoLModCenter.changes.v1',labels={installBatch:'批量导入／更新',rollbackRecovery:'启动恢复',dismissRecovery:'确认保留配置',install:'导入／更新',remove:'删除',toggle:'启停',move:'拖拽排序',reorderCatalog:'按前置排序',restore:'恢复完整备份',disableAll:'停用全部旁加载模组'};
  let entries=[],warning='',loaded=false;
  const clean=v=>typeof v==='string'?v.slice(0,160):'';
  function sanitize(e){if(!e||!Object.prototype.hasOwnProperty.call(labels,e.kind)||typeof e.time!=='string'||!Array.isArray(e.names))return null;return {kind:e.kind,time:e.time.slice(0,40),names:e.names.slice(0,100).map(clean).filter(Boolean),count:Number.isSafeInteger(e.count)?Math.max(0,e.count):e.names.length,version:clean(e.version),outcome:'success'};}
@@ -14,7 +14,8 @@
    const result=await fn(...args);
    try{
     let names=[],version='';
-    if(kind==='install'){const details=info.get(args[1]);names=[details?.name||prepared.get(args[0])].filter(Boolean);version=details?.version||'';}
+    if(kind==='installBatch'||kind==='rollbackRecovery')names=args[0]?.names||[];
+    else if(kind==='install'){const details=info.get(args[1]);names=[details?.name||prepared.get(args[0])].filter(Boolean);version=details?.version||'';}
     else if(['remove','toggle','move'].includes(kind))names=[args[1]];
     else if(kind==='restore')names=args[0]?.names||[];
     else if(kind==='reorderCatalog')names=args[1]||[];

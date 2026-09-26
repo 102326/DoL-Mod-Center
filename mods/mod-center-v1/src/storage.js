@@ -3,6 +3,8 @@
   'use strict';
   const LIMIT = 256 * 1024 * 1024;
   let activeWrites=0;
+  const RECOVERY_KEY='DoLModCenter.recovery.v1';
+  const SESSION=String(Date.now())+'-'+Math.random().toString(36).slice(2);
   function validName(name) {
     return typeof name === 'string' && name.length > 0 && name.length <= 512 && !/[\x00-\x1f]/.test(name);
   }
@@ -35,6 +37,7 @@
     const prepared = new WeakMap();
     const restoreTokens = new WeakMap();
     const catalogTokens = new WeakMap();
+    const batchTokens=new WeakMap(), recoveryTokens=new WeakMap(), metadataCache=new Map();
     function contract() {
       const manager = environment.modSC2DataManager;
       const utils = environment.modUtils || manager?.getModUtils?.();
@@ -50,7 +53,7 @@
       const prefix = cls.calcModNameKey('');
       if (!prefix || enabledKey === disabledKey || typeof prefix !== 'string' ||
           cls.calcModNameKey('DMC-Probe') !== prefix + 'DMC-Probe' ||
-          enabledKey.startsWith(prefix) || disabledKey.startsWith(prefix)) throw Error('加载器键名契约不受支持。');
+          enabledKey.startsWith(prefix) || disabledKey.startsWith(prefix) || RECOVERY_KEY.startsWith(prefix) || [enabledKey,disabledKey].includes(RECOVERY_KEY)) throw Error('加载器键名契约不受支持。');
       return {utils, controller, loader, enabledKey, disabledKey, prefix, key: name => cls.calcModNameKey(name)};
     }
     function cacheEntries(c) {
@@ -175,7 +178,7 @@
           if(enabled.some(n=>disabled.includes(n)))throw Error('启用和禁用列表重叠。');
           const packages=keys.filter(k=>typeof k==='string'&&k.startsWith(c.prefix)).map(k=>({name:k.slice(c.prefix.length),bytes:bytesOf(map.get(k))}));
           if(packages.some(p=>!validName(p.name)||c.key(p.name)!==c.prefix+p.name))throw Error('包体键名异常。');
-          result=operation(store,{enabled,disabled,packages,rawEnabled:map.get(c.enabledKey),rawDisabled:map.get(c.disabledKey)});
+          result=operation(store,{enabled,disabled,packages,rawEnabled:map.get(c.enabledKey),rawDisabled:map.get(c.disabledKey),recovery:map.get(RECOVERY_KEY)});
         }catch(error){failure=error;tx.abort();}}
         const kr=store.getAllKeys(),vr=store.getAll();kr.onsuccess=()=>{keys=kr.result;finish();};vr.onsuccess=()=>{values=vr.result;finish();};
       }));
@@ -319,6 +322,7 @@
         checkPreloads(c,plan.preloaded);
         await allPackages(c,'readwrite',(store,current)=>{
           if(current.rawEnabled!==plan.before.rawEnabled || current.rawDisabled!==plan.before.rawDisabled || !sameSnapshot(current,plan.before))throw Error('恢复确认期间配置或包体已变化，请重新检查。');
+          store.delete(RECOVERY_KEY);
           for(const p of current.packages)store.delete(c.key(p.name));
           for(const p of plan.next.packages)store.put(p.bytes,c.key(p.name));
           store.put(JSON.stringify(plan.next.enabled),c.enabledKey);store.put(JSON.stringify(plan.next.disabled),c.disabledKey);
@@ -335,9 +339,10 @@
       const revision=JSON.stringify([before.enabled,before.disabled,before.packages.map(p=>p.name).sort()]);
       if(snapshot && revision!==snapshot.revision)throw Error('配置已变化，请刷新后读取包资料。');
       if(before.packages.length>2000 || before.packages.reduce((n,p)=>n+p.bytes.length,0)>LIMIT)throw Error('包资料扫描超过 256 MiB 或 2000 个包的限制；仍可逐包查看详情和管理。');
+      for(const name of metadataCache.keys())if(!before.packages.some(p=>p.name===name))metadataCache.delete(name);
       const items=[];
       for(const p of before.packages){
-        try{const info=await inspect(p.bytes);if(info.name!==p.name)throw Error('包内名称与登记名称不一致');items.push(info);}
+        try{let cached=metadataCache.get(p.name);if(!cached||!sameBytes(cached.bytes,p.bytes)){const info=await inspect(p.bytes);if(info.name!==p.name)throw Error('包内名称与登记名称不一致');cached={bytes:p.bytes,info};metadataCache.set(p.name,cached)}items.push(JSON.parse(JSON.stringify(cached.info)));}
         catch(error){items.push({name:p.name,error:error.message});}
       }
       const decorated=decorateState(c, {...before, packages: before.packages.map(p => p.name)});
@@ -416,7 +421,95 @@
         return {...decorateState(c, after), writable: true, reason: ''};
       } finally { busy = false; activeWrites--; }
     }
+    function bounded(raw){
+      if(raw.packages.length>2000||raw.packages.reduce((n,p)=>n+p.bytes.length,0)>LIMIT)throw Error('启动恢复总包体超过 256 MiB 或 2000 包限制。');
+    }
+    async function fingerprint(raw){
+      bounded(raw);const signatures=[];
+      for(const p of [...raw.packages].sort((a,b)=>a.name.localeCompare(b.name)))signatures.push([p.name,p.bytes.length,await digest(p.bytes)]);
+      return digest(new TextEncoder().encode(JSON.stringify([raw.rawEnabled,raw.rawDisabled,raw.enabled,raw.disabled,signatures])));
+    }
+    // Only this installer creates a recovery point. Lists, new ZIPs and old ZIPs commit together.
+    async function prepareInstallBatch(snapshot, inputs){
+      if(!Array.isArray(inputs)||!inputs.length||inputs.length>100)throw Error('一次请选择 1–100 个 ZIP。');
+      const c=contract();if(c.utils.version!=='2.101.1')throw Error('当前加载器只读。');
+      const packages=[],items=[],names=new Set();let total=0;
+      for(const input of inputs){const bytes=bytesOf(input);total+=bytes.length;if(total>LIMIT)throw Error('导入包总量超过 256 MiB。');const info=await inspect(bytes);if(names.has(info.name))throw Error('同批包名称重复：'+info.name);names.add(info.name);packages.push({name:info.name,bytes});items.push(info);}
+      const before=await allPackages(c,'readonly',(_,s)=>s);bounded(before);
+      const revision=JSON.stringify([before.enabled,before.disabled,before.packages.map(p=>p.name).sort()]);
+      if(revision!==snapshot?.revision)throw Error('配置已变化，请重新导入。');
+      if(before.recovery!==undefined)throw Error('存在未处理的启动恢复点，请先在备份与恢复中确认保留当前配置或撤销上次导入。');
+      const next={enabled:[...before.enabled],disabled:[...before.disabled],packages:before.packages.filter(p=>!names.has(p.name)).concat(packages).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)};
+      for(const p of packages)if(!next.enabled.includes(p.name)&&!next.disabled.includes(p.name))next.enabled.push(p.name);
+      parseList(JSON.stringify(next.enabled),'导入启用列表');parseList(JSON.stringify(next.disabled),'导入禁用列表');
+      next.rawEnabled=JSON.stringify(next.enabled);next.rawDisabled=JSON.stringify(next.disabled);
+      bounded(next);
+      const previous=[];
+      for(const p of packages){const old=before.packages.find(x=>x.name===p.name);previous.push({name:p.name,data:old?encode(old.bytes):null,sha256:old?await digest(old.bytes):null});}
+      const record={schema:'DoLModCenter.recovery.v1',loaderVersion:c.utils.version,id:SESSION+'-'+Math.random().toString(36).slice(2),session:SESSION,createdAt:new Date().toISOString(),enabled:[...before.enabled],disabled:[...before.disabled],previous,expected:await fingerprint(next)};
+      const token={items:JSON.parse(JSON.stringify(items)),names:[...names],enabled:[...next.enabled],disabled:[...next.disabled]};
+      batchTokens.set(token,{before,next,record});return token;
+    }
+    async function installBatch(token){
+      const plan=batchTokens.get(token);if(!plan)throw Error('请重新检查导入包。');
+      if(busy)throw Error('已有存储操作进行中。');busy=true;activeWrites++;
+      try{const c=contract();if(c.utils.version!=='2.101.1')throw Error('当前加载器只读。');
+        await allPackages(c,'readwrite',(store,current)=>{
+          if(current.recovery!==undefined||current.rawEnabled!==plan.before.rawEnabled||current.rawDisabled!==plan.before.rawDisabled||!sameSnapshot(current,plan.before))throw Error('确认期间配置或包体已变化，请重新导入。');
+          store.put(plan.record,RECOVERY_KEY);
+          for(const p of plan.next.packages)if(plan.record.previous.some(x=>x.name===p.name))store.put(p.bytes,c.key(p.name));
+          store.put(JSON.stringify(plan.next.enabled),c.enabledKey);store.put(JSON.stringify(plan.next.disabled),c.disabledKey);
+        });batchTokens.delete(token);
+        const after=await allPackages(c,'readonly',(_,s)=>s);
+        if(after.rawEnabled!==plan.next.rawEnabled||after.rawDisabled!==plan.next.rawDisabled||!sameSnapshot(after,plan.next)||JSON.stringify(after.recovery)!==JSON.stringify(plan.record))throw Error('导入已提交，但回读发现变化；请检查恢复点。');
+        return read();
+      }finally{busy=false;activeWrites--;}
+    }
+    function recoverySummary(record){
+      if(!record)return null;
+      if(record.schema!=='DoLModCenter.recovery.v1'||record.loaderVersion!=='2.101.1'||!Array.isArray(record.previous)||record.previous.length<1||record.previous.length>100||typeof record.id!=='string'||record.id.length>160||typeof record.session!=='string'||record.session.length>160||typeof record.createdAt!=='string'||record.createdAt.length>40||!Number.isFinite(Date.parse(record.createdAt))||typeof record.expected!=='string'||!/^[a-f0-9]{64}$/.test(record.expected))throw Error('启动恢复点格式异常，保留原记录，请先导出完整备份。');
+      return {id:record.id,createdAt:record.createdAt,names:record.previous.map(p=>p.name),pendingRestart:record.session===SESSION};
+    }
+    async function readRecovery(){return allPackages(contract(),'readonly',(_,s)=>recoverySummary(s.recovery));}
+    async function prepareRecovery(){
+      const c=contract(),before=await allPackages(c,'readonly',(_,s)=>s),record=before.recovery;
+      const summary=recoverySummary(record);if(!summary)throw Error('没有启动恢复点。');
+      if(await fingerprint(before)!==record.expected)throw Error('导入后配置或包体已有其他变化，不能直接回退；请使用完整备份或手动核对。');
+      const enabled=parseList(JSON.stringify(record.enabled),'恢复启用列表'),disabled=parseList(JSON.stringify(record.disabled),'恢复禁用列表');
+      if(enabled.some(n=>disabled.includes(n)))throw Error('恢复名单重叠。');
+      if(record.previous.reduce((n,p)=>n+(typeof p?.data==='string'?p.data.length:0),0)>Math.ceil(LIMIT/3)*4+400)throw Error('旧包体编码总量超过限制。');
+      const names=new Set(),packages=[...before.packages];let oldTotal=0;
+      for(const p of record.previous){
+        if(!validName(p?.name)||names.has(p.name)||!before.packages.some(x=>x.name===p.name))throw Error('恢复包条目无效。');names.add(p.name);
+        if(p.data===null){if(p.sha256!==null)throw Error('新增包恢复条目无效。');if(!disabled.includes(p.name)&&!enabled.includes(p.name))disabled.push(p.name);continue;}
+        if(typeof p.data!=='string'||p.data.length>Math.ceil(LIMIT/3)*4||p.data.length%4!==0||/[^A-Za-z0-9+/=]/.test(p.data)||typeof p.sha256!=='string'||!/^[a-f0-9]{64}$/.test(p.sha256))throw Error('旧包体大小或格式异常。');
+        const bytes=bytesOf(p.data);oldTotal+=bytes.length;if(!bytes.length||oldTotal>LIMIT||encode(bytes)!==p.data)throw Error('旧包体总量或编码不合法。');if(await digest(bytes)!==p.sha256)throw Error('旧包体校验失败：'+p.name);
+        const info=await inspect(bytes);if(info.name!==p.name)throw Error('旧包名称不符。');
+        const i=packages.findIndex(x=>x.name===p.name);if(i<0)throw Error('当前包体缺失。');packages[i]={name:p.name,bytes};
+      }
+      parseList(JSON.stringify(enabled),'恢复启用列表');parseList(JSON.stringify(disabled),'恢复禁用列表');
+      const token={...summary};recoveryTokens.set(token,{before,recordText:JSON.stringify(record),next:{enabled,disabled,packages}});return token;
+    }
+    async function rollbackRecovery(token){
+      const plan=recoveryTokens.get(token);if(!plan)throw Error('请重新检查恢复点。');
+      if(busy)throw Error('已有存储操作进行中。');busy=true;activeWrites++;
+      try{const c=contract();if(c.utils.version!=='2.101.1')throw Error('当前加载器只读。');
+        await allPackages(c,'readwrite',(store,current)=>{
+          if(JSON.stringify(current.recovery)!==plan.recordText||current.rawEnabled!==plan.before.rawEnabled||current.rawDisabled!==plan.before.rawDisabled||!sameSnapshot(current,plan.before))throw Error('恢复确认期间配置发生变化，请重新检查。');
+          for(const p of plan.next.packages)if(current.recovery.previous.some(x=>x.name===p.name&&x.data!==null))store.put(p.bytes,c.key(p.name));
+          store.put(JSON.stringify(plan.next.enabled),c.enabledKey);store.put(JSON.stringify(plan.next.disabled),c.disabledKey);store.delete(RECOVERY_KEY);
+        });recoveryTokens.delete(token);
+        const after=await allPackages(c,'readonly',(_,s)=>s);if(after.rawEnabled!==JSON.stringify(plan.next.enabled)||after.rawDisabled!==JSON.stringify(plan.next.disabled)||!sameSnapshot(after,plan.next)||after.recovery!==undefined)throw Error('恢复已提交但回读不符，请刷新检查。');
+        return read();
+      }finally{busy=false;activeWrites--;}
+    }
+    async function dismissRecovery(id){
+      if(busy)throw Error('已有存储操作进行中。');busy=true;activeWrites++;
+      try{const c=contract();if(c.utils.version!=='2.101.1')throw Error('当前加载器只读。');return await allPackages(c,'readwrite',(store,s)=>{if(s.recovery?.id!==id)throw Error('恢复点已变化，请刷新。');store.delete(RECOVERY_KEY);});}
+      finally{busy=false;activeWrites--;}
+    }
     return {
+      prepareInstallBatch,installBatch,readRecovery,prepareRecovery,rollbackRecovery,dismissRecovery,
       read, inspect, details, loadedDetails, catalog, reorderCatalog, exportZip, prepare, backup, emergencyBackup, prepareRestore, restore, disableAll,isBusy:()=>busy,
       toggle(snapshot, name, enabled) {
         if (typeof enabled !== 'boolean') return Promise.reject(Error('启停状态必须是布尔值。'));

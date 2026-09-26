@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import {computed,nextTick,onBeforeUnmount,onMounted,ref,shallowRef,watch} from 'vue';
 import LegacyPanel from './LegacyPanel.vue';
+import DiagnosticAssistant from './DiagnosticAssistant.vue';
+import StartupRecovery from './StartupRecovery.vue';
 import {runtime,storage,emptyState,download,type State,type ModInfo,type Catalog} from './bridge';
 const api=storage(),state=shallowRef<State>(emptyState()),catalog=shallowRef<Catalog>();
 const opened=ref(false),tab=ref('local'),query=ref(''),busy=ref(false),message=ref(''),error=ref(false),changed=ref(false),preloads=ref(false);
 const panel=ref<HTMLElement>(),list=ref<HTMLElement>(),file=ref<HTMLInputElement>(),detailHost=ref<HTMLElement>();
 const detail=ref<{name:string;loaded:boolean}>();const pending=shallowRef<{text:string;action:()=>Promise<unknown>}>();
-const tabs=[{id:'local',icon:'▦',name:'本地模组',sub:'安装与加载顺序'},{id:'diagnostics',icon:'◎',name:'运行诊断',sub:'错误与变更记录'},{id:'backups',icon:'◇',name:'备份与恢复',sub:'保护当前配置'},{id:'profiles',icon:'▤',name:'配置快照',sub:'保存名单与顺序'},{id:'beauty',icon:'◈',name:'美化图层',sub:'图片包与 type'}];
+const recoveryPanel=ref<InstanceType<typeof StartupRecovery>>();
+const assistant=ref<InstanceType<typeof DiagnosticAssistant>>(), localPage=ref('mods'), rawLogs=ref(false);
+const tabs=[{id:'local',icon:'▦',name:'本地模组',sub:'模组与美化图层'},{id:'diagnostics',icon:'◎',name:'诊断助手',sub:'检查问题与排查线索'},{id:'backups',icon:'◇',name:'备份与恢复',sub:'启动恢复与配置快照'}];
+const dragMessage=ref('');
+const undoOrder=shallowRef<{token:Catalog;order:string[]}>();let undoTimer:ReturnType<typeof setTimeout>|undefined;
+function clearUndo(){undoOrder.value=undefined;if(undoTimer)clearTimeout(undoTimer);undoTimer=undefined}
+async function undoSort(){if(busy.value||pending.value)return;const saved=undoOrder.value;if(!saved)return;clearUndo();await run(()=>api.reorderCatalog(saved.token,saved.order),true)}
 const activeTitle=computed(()=>tab.value==='details'?'模组详情':tabs.find(t=>t.id===tab.value)?.name);
 const isPreload=(name:string)=>!state.value.packages.includes(name)&&state.value.preloaded.some(p=>p.name===name);
 const managed=computed(()=>state.value.enabled.filter(n=>!isPreload(n)));
-const info=(name:string):ModInfo=>catalog.value?.items.find(p=>p.name===name)||state.value.loaded.find(p=>p.name===name)||{name};
+const infoIndex=computed(()=>new Map([...state.value.loaded,...(catalog.value?.items||[])].map(p=>[p.name,p])));
+const info=(name:string):ModInfo=>infoIndex.value.get(name)||{name};
 const matches=(p:ModInfo)=>(p.name+' '+(p.version||'')).toLowerCase().includes(query.value.toLowerCase());
 const enabled=computed(()=>managed.value.map(info).filter(matches));
 const other=computed(()=>[...new Set([...state.value.disabled,...state.value.orphans,...state.value.loaded.map(p=>p.name)])].filter(n=>!state.value.enabled.includes(n)&&!isPreload(n)).map(info).filter(matches));
@@ -18,13 +27,26 @@ const builtins=computed(()=>state.value.preloaded.filter(p=>isPreload(p.name)).f
 const protectedMod=(name:string)=>name==='DoLModCenter'&&!runtime.__DMC_BUILTIN;
 const writable=(name:string)=>state.value.writable&&!busy.value&&!pending.value&&!protectedMod(name);
 function notify(text:string,failed=false){message.value=text;error.value=failed;}
+async function checkDiagnosis(){await run(async()=>{await refresh();await nextTick();assistant.value?.check()})}
 async function refresh(){let s:State;try{s=await api.read()}catch(e){state.value=emptyState();catalog.value=undefined;throw e}state.value=s;try{catalog.value=await api.catalog(s)}catch(e){catalog.value=undefined;notify('包资料读取失败：'+String(e),true)}}
-async function run(fn:()=>Promise<unknown>,mutate=false){if(busy.value||runtime.DMCStorage.isBusy())return;busy.value=true;try{await fn();if(mutate){changed.value=true;await refresh();notify('配置已保存，重启游戏后生效。')}}catch(e){notify(String(e),true)}finally{busy.value=false;await bindDrag()}}
+async function run(fn:()=>Promise<unknown>,mutate=false){if(busy.value||runtime.DMCStorage.isBusy())return;if(mutate)clearUndo();busy.value=true;try{await fn();if(mutate){changed.value=true;await refresh();notify('配置已保存，重启游戏后生效。')}}catch(e){notify(String(e),true)}finally{busy.value=false;await bindDrag()}}
 function confirm(text:string,action:()=>Promise<unknown>){pending.value={text,action};}
 async function accept(){const p=pending.value;pending.value=undefined;if(p)await run(p.action,true)}
-function toggle(p:ModInfo){const s=state.value,on=!s.enabled.includes(p.name);confirm((on?'启用':'禁用')+'“'+p.name+'”？',()=>api.toggle(s,p.name,on))}
+function toggle(p:ModInfo){const s=state.value,on=!s.enabled.includes(p.name);const affected=on?[]:runtime.DMCAssistant?.dependents(p.name,{state:s,catalog:catalog.value})||[];confirm((on?'启用':'禁用')+'“'+p.name+'”？'+(affected.length?'\n以下已启用模组依赖它：'+affected.join('、')+'。这些模组不会被自动停用。':''),()=>api.toggle(s,p.name,on))}
 async function remove(p:ModInfo){await run(async()=>{const token=await api.prepare(state.value,p.name);confirm('删除“'+p.name+'”？建议先导出 ZIP。',()=>api.remove(token,p.name))})}
-async function importFile(e:Event){const input=e.target as HTMLInputElement,f=input.files?.[0];input.value='';if(!f)return;await run(async()=>{if(f.size>268435456)throw Error('文件超过 256 MiB');const bytes=new Uint8Array(await f.arrayBuffer()),i=await api.inspect(bytes),token=await api.prepare(state.value,i.name);confirm('导入“'+i.name+'” '+i.version+'？'+(state.value.packages.includes(i.name)?' 将替换同名本地包。':''),()=>api.install(token,bytes))})}
+async function importFile(e:Event){
+ const input=e.target as HTMLInputElement,files=[...(input.files||[])];input.value='';if(!files.length)return;
+ await run(async()=>{
+  if(files.length>100||files.reduce((n,f)=>n+f.size,0)>268435456)throw Error('一次最多 100 包，总大小不超过 256 MiB');
+  const bytes=[];for(const f of files)bytes.push(new Uint8Array(await f.arrayBuffer()));
+  const token=await api.prepareInstallBatch(state.value,bytes),current=await api.catalog(state.value);
+  const replacement=new Set(token.names),nextCatalog={...current,items:current.items.filter(p=>!replacement.has(p.name)).concat(token.items)};
+  const findings=runtime.DMCAssistant.analyze({state:{...state.value,enabled:token.enabled,disabled:token.disabled,missing:state.value.missing.filter(n=>!replacement.has(n)),packages:[...new Set([...state.value.packages,...token.names])]},catalog:nextCatalog,loaderVersion:runtime.modUtils?.version,checkVersion:(v:string,r:string)=>{try{const a=runtime.modSC2DataManager?.getDependenceChecker?.().getInfiniteSemVerApi?.();return a?.satisfies(a.parseVersion(v).version,a.parseRange(r))}catch{return undefined}}});
+  const overview=token.items.map(p=>{const old=current.items.find(x=>x.name===p.name);return p.name+'：'+(old?(old.version||'未知')+' → ':'新增 ')+p.version+(token.disabled.includes(p.name)?'（保持禁用）':'（下次启用）')}).join('\n');
+  const warnings=findings.filter((f:any)=>f.severity!=='info').map((f:any)=>f.title+'：'+f.evidence.join('；')).join('\n');
+  confirm(overview+'\n'+(warnings?'预检发现以下问题，请核对后决定是否导入：\n'+warnings:'可检查范围内未发现依赖问题。')+'\n确认后整批写入，同时保存启动恢复点；不会自动下载、排序或停用其他模组。',()=>api.installBatch(token));
+ });
+}
 async function exportZip(p:ModInfo){await run(async()=>{await download(await api.exportZip(p.name),p.name.replace(/[\\/:*?"<>|]/g,'_')+'.zip');notify('已发起 ZIP 导出，请确认系统保存结果。')})}
 async function details(p:ModInfo,loaded=!state.value.packages.includes(p.name)){detail.value={name:p.name,loaded};tab.value='details';await nextTick();if(!detailHost.value)return;detailHost.value.textContent='正在读取…';await run(async()=>{const i=await(loaded?api.loadedDetails(p.name):api.details(p.name));if(detailHost.value)runtime.DMCModInfo.render(detailHost.value,i)})}
 async function sort(){await run(async()=>{const token=await api.catalog(state.value),fixed=new Set(token.preloaded.filter(p=>!token.items.some(i=>i.name===p.name)).map(p=>p.name)),names=token.enabled.filter(n=>!fixed.has(n));
@@ -33,31 +55,32 @@ async function sort(){await run(async()=>{const token=await api.catalog(state.va
  const plan=runtime.DMCSort.plan(items,{external,disabled:token.disabled.filter(n=>!fixed.has(n)),loaderVersion:runtime.modUtils?.version||'',checkVersion:(v:string,r:string)=>{try{const sv=runtime.modSC2DataManager?.getDependenceChecker?.().getInfiniteSemVerApi();return sv?.satisfies(sv.parseVersion(v).version,sv.parseRange(r))}catch{return undefined}}});
  if(plan.errors.length)throw Error(plan.errors.join('；'));if(!plan.changed){notify('当前顺序已符合规则。'+plan.warnings.join('；'));return}let i=0;const order=token.enabled.map(n=>fixed.has(n)?n:plan.order[i++]);confirm('建议顺序：\n'+order.join(' → ')+'\n'+plan.warnings.join('；'),()=>api.reorderCatalog(token,order));
 })}
-let drag:{destroy():void}|undefined;
-async function bindDrag(){drag?.destroy();drag=undefined;await nextTick();if(!list.value||tab.value!=='local'||busy.value||query.value||pending.value)return;const s=state.value,order=[...managed.value];drag=runtime.DMCDrag.bind(list.value,{onDrop:(name:string,index:number)=>run(()=>api.move(s,name,s.enabled.indexOf(order[index])),true),onAnnounce:(text:string)=>notify(text)})}
-watch([tab,query,pending],()=>bindDrag());
+let drag:{destroy():void;cancel?():boolean}|undefined;
+async function bindDrag(){drag?.destroy();drag=undefined;await nextTick();if(!list.value||tab.value!=='local'||localPage.value!=='mods'||busy.value||query.value||pending.value)return;const s=state.value,order=[...managed.value];drag=runtime.DMCDrag.bind(list.value,{onDrop:(name:string,index:number)=>run(async()=>{const result=await api.move(s,name,s.enabled.indexOf(order[index]));try{const token=await api.catalog(result);undoOrder.value={token,order:[...s.enabled]};undoTimer=setTimeout(clearUndo,12000)}catch{notify('顺序已保存，撤销记录未能建立，请刷新核对。',true)}},true),onAnnounce:(text:string)=>{dragMessage.value=text}})}
+watch([tab,query,pending,localPage],()=>bindDrag());
 let previous:Element|null=null,oldOverflow='';
 async function open(){if(opened.value)return;previous=document.activeElement;oldOverflow=document.body.style.overflow;document.body.style.overflow='hidden';opened.value=true;await nextTick();panel.value?.focus();await run(refresh)}
-function release(){if(!opened.value)return;opened.value=false;pending.value=undefined;drag?.destroy();document.body.style.overflow=oldOverflow;(previous as HTMLElement)?.focus?.()}
-function close(){if(busy.value||runtime.DMCStorage.isBusy()||runtime.DMCRescue?.isBusy?.()){notify('请等待当前操作完成。');return}release()}
-function key(e:KeyboardEvent){if(!opened.value)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();if(pending.value)pending.value=undefined;else if(tab.value==='details')tab.value='local';else close()}if(e.key==='Tab'){const nodes=[...panel.value!.querySelectorAll<HTMLElement>('button,input,a[href],select,textarea,summary')].filter(n=>!n.hasAttribute('disabled')&&n.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&(document.activeElement===first||document.activeElement===panel.value)){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}}
-function back(e:Event){if(opened.value){e.preventDefault();e.stopImmediatePropagation();if(pending.value)pending.value=undefined;else if(tab.value==='details')tab.value='local';else close()}}
-onMounted(()=>{runtime.DMCNext={open,close,fail:release};document.addEventListener('backbutton',back,true)});
-onBeforeUnmount(()=>{drag?.destroy();document.removeEventListener('backbutton',back,true);if(opened.value)document.body.style.overflow=oldOverflow;delete runtime.DMCNext});
+function release(){if(!opened.value)return;clearUndo();opened.value=false;pending.value=undefined;drag?.destroy();document.body.style.overflow=oldOverflow;(previous as HTMLElement)?.focus?.()}
+function close(){if(recoveryPanel.value?.isWorking()||busy.value||runtime.DMCStorage.isBusy()||runtime.DMCRescue?.isBusy?.()){notify('请等待当前操作完成。');return}release()}
+function key(e:KeyboardEvent){if(!opened.value)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();if(drag?.cancel?.())return;if(recoveryPanel.value?.cancelPending())return;if(pending.value)pending.value=undefined;else if(tab.value==='details')tab.value='local';else close()}if(e.key==='Tab'){const nodes=[...panel.value!.querySelectorAll<HTMLElement>('button,input,a[href],select,textarea,summary')].filter(n=>!n.hasAttribute('disabled')&&n.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&(document.activeElement===first||document.activeElement===panel.value)){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}}
+function back(e:Event){if(opened.value){e.preventDefault();e.stopImmediatePropagation();if(drag?.cancel?.())return;if(recoveryPanel.value?.cancelPending())return;if(pending.value)pending.value=undefined;else if(tab.value==='details')tab.value='local';else close()}}
+onMounted(()=>{runtime.DMCNext={open,close,fail:release};document.addEventListener('backbutton',back,true);document.addEventListener('keydown',key,true)});
+onBeforeUnmount(()=>{clearUndo();drag?.destroy();document.removeEventListener('backbutton',back,true);document.removeEventListener('keydown',key,true);if(opened.value)document.body.style.overflow=oldOverflow;delete runtime.DMCNext});
 </script>
 <template>
-<div v-show="opened" class="dmc-next" @keydown="key">
+<div v-show="opened" class="dmc-next">
+ <span role="status" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">{{dragMessage}}</span>
  <section ref="panel" class="next-window" role="dialog" aria-modal="true" aria-labelledby="next-title" tabindex="-1">
-  <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>新版工作台 · 2.0</small></div></div>
+  <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>模组中心 · 2.2.1</small></div></div>
    <nav aria-label="新版模组中心"><button v-for="t in tabs" :key="t.id" :class="{selected:tab===t.id}" :disabled="busy||!!pending" @click="tab=t.id"><span>{{t.icon}}</span><div>{{t.name}}<small>{{t.sub}}</small></div></button></nav>
   </aside>
   <div class="next-main"><header><div><small class="next-eyebrow">WORKSPACE / {{ tab.toUpperCase() }}</small><h2 id="next-title">{{activeTitle}}</h2></div><button aria-label="关闭模组中心" class="next-close" @click="close">×</button></header>
    <div v-if="busy||message||changed" class="next-notice" role="status" :class="{failure:error}">{{busy?'正在处理，请稍候…':message}}<span v-if="changed">{{busy||message?' · ':''}}更改需重启</span></div>
    <div v-if="pending" class="next-confirm" role="alertdialog" aria-label="确认配置修改"><p>{{pending.text}}</p><button @click="accept">确认</button><button @click="pending=undefined">取消</button></div>
    <main class="next-scroll dmc-content">
-    <section v-if="tab==='local'">
+    <section v-show="tab==='local'"><div class="next-toolbar"><button :aria-pressed="localPage==='mods'" @click="localPage='mods'">模组列表</button><button :aria-pressed="localPage==='beauty'" @click="localPage='beauty'">美化图层</button></div><LegacyPanel kind="beauty" :api="api" :active="tab==='local'&&localPage==='beauty'&&opened" /><section v-show="localPage==='mods'">
      <div class="next-overview"><div><small>本地包</small><strong>{{state.packages.length}}</strong></div><div><small>下次启用</small><strong>{{state.enabled.length}}</strong></div><div><small>当前挂载</small><strong>{{state.loaded.length}}</strong></div><div><small>缺失引用</small><strong :class="{danger:state.missing.length}">{{state.missing.length}}</strong></div></div>
-     <div class="next-toolbar mc:flex mc:flex-wrap mc:gap-2"><input v-model="query" type="search" aria-label="搜索模组" placeholder="搜索模组名称或版本…"><button class="primary" :disabled="busy||!!pending||!state.writable" @click="file?.click()">＋ 导入 ZIP</button><button :disabled="busy||!!pending" @click="run(refresh)">刷新</button><button :disabled="busy||!!pending||!state.writable" @click="sort">按前置排序</button><button :disabled="busy||!!pending" @click="confirm('已保存游戏？确认重启游戏？',async()=>{runtime.location.reload()})">重启</button><input ref="file" type="file" accept=".zip" hidden @change="importFile"></div>
+     <div class="next-toolbar mc:flex mc:flex-wrap mc:gap-2"><input v-model="query" type="search" aria-label="搜索模组" placeholder="搜索模组名称或版本…"><button class="primary" :disabled="busy||!!pending||!state.writable" @click="file?.click()">＋ 导入 ZIP</button><button :disabled="busy||!!pending" @click="run(refresh)">刷新</button><button :disabled="busy||!!pending||!state.writable" @click="sort">按前置排序</button><button :disabled="busy||!!pending" @click="confirm('已保存游戏？确认重启游戏？',async()=>{runtime.location.reload()})">重启</button><input ref="file" type="file" accept=".zip" multiple hidden @change="importFile"></div>
      <p class="next-help">拖动手柄，松手保存顺序。启用状态用于下次启动，挂载状态代表当前会话。</p>
      <p v-if="state.reason" class="next-error">{{state.reason}}</p><p v-if="state.missing.length" class="next-error">缺少包体：{{state.missing.join('、')}}</p>
      <h3>额外模组 <span>{{enabled.length+other.length}}</span></h3>
@@ -69,9 +92,12 @@ onBeforeUnmount(()=>{drag?.destroy();document.removeEventListener('backbutton',b
      <p v-if="!enabled.length&&!other.length" class="next-empty">没有匹配的模组。</p>
      <button class="next-preload" @click="preloads=!preloads" :aria-expanded="preloads">{{preloads?'▾':'▸'}} 游戏预载 · {{builtins.length}} <span>只读</span></button><div v-if="preloads"><article class="next-card" v-for="p in builtins" :key="p.name"><div class="next-card-info"><strong>{{p.name}}</strong><small>{{p.version}}</small></div><button :disabled="busy" @click="details(p,true)">详情</button></article></div>
     </section>
+    </section>
     <section v-if="tab==='details'"><div class="next-toolbar mc:flex mc:flex-wrap mc:gap-2"><button @click="tab='local'">← 返回列表</button><button v-if="detail&&state.packages.includes(detail.name)&&state.loaded.some(p=>p.name===detail!.name)" :disabled="busy" @click="details({name:detail!.name},!detail!.loaded)">{{detail.loaded?'查看本地包':'查看已挂载包'}}</button></div><p class="next-help">{{detail?.loaded?'本次运行包资料':'本地包资料，下次启动使用'}}</p><article ref="detailHost" class="next-detail" /></section>
-    <LegacyPanel v-for="kind in ['diagnostics','backups','profiles','beauty']" :key="kind" :kind="kind" :api="api" :active="tab===kind&&opened" />
+    <section v-if="tab==='diagnostics'"><DiagnosticAssistant ref="assistant" :state="state" :catalog="catalog" :busy="busy" @refresh="checkDiagnosis" @inspect="name=>details(info(name))" @recovery="tab='backups'" /><details @toggle="rawLogs=($event.target as HTMLDetailsElement).open"><summary>原始日志与运行环境</summary><LegacyPanel kind="diagnostics" :api="api" :active="rawLogs&&opened" /></details></section>
+    <section v-if="tab==='backups'"><p class="next-help">导入更新靠启动恢复，大改前导出完整备份，保存常用搭配用配置快照。游戏进度仍需单独导出存档。</p><LegacyPanel kind="backups" :api="api" :active="tab==='backups'&&opened" /><StartupRecovery ref="recoveryPanel" :api="api" :busy="busy" @changed="run(refresh)" /><details><summary>配置快照（保存常用搭配）</summary><LegacyPanel kind="profiles" :api="api" :active="tab==='backups'&&opened" /></details></section>
    </main>
+   <div v-if="undoOrder" class="next-sort-toast" role="status"><span>顺序已保存</span><button :disabled="busy||!!pending" @click="undoSort">撤销排序</button><button aria-label="关闭排序提示" @click="clearUndo">×</button></div>
    <footer><span>离线模组管理</span><span>本地配置工作台</span></footer>
   </div>
  </section>

@@ -12,8 +12,8 @@ for key in ['scriptFileList','styleFileList','tweeFileList','imgFileList','addit
   source=(legacy/name).resolve()
   assert source.is_relative_to(legacy.resolve())
   assets[name]=source.read_bytes()
-boot['scriptFileList'].append('ui.js');boot['styleFileList'].append('ui.css')
-for name in ['ui.js','ui.css']:assets[name]=(root/'dist'/name).read_bytes()
+boot['scriptFileList'].append('dol-mod-center-ui.js');boot['styleFileList'].append('dol-mod-center-ui.css')
+for name in ['ui.js','ui.css']:assets['dol-mod-center-'+name]=(root/'dist'/name).read_bytes()
 notices=[]
 for name in ['vue','tailwindcss'] + ['@vue/'+p.name for p in sorted((root/'node_modules/@vue').iterdir()) if p.is_dir()]:
  folder=root/'node_modules'/name
