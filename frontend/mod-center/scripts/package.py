@@ -4,7 +4,8 @@ root=Path(__file__).resolve().parent.parent
 project=root.parent.parent
 legacy=project/'mods/mod-center-v1/src'
 boot=json.loads((legacy/'boot.json').read_text(encoding='utf-8'))
-boot['version']='2.0.0-preview.1'
+boot['version']='2.0.0-preview.2'
+boot['scriptFileList']=[name for name in boot['scriptFileList'] if name!='manager-ui.js']
 assets={}
 for key in ['scriptFileList','styleFileList','tweeFileList','imgFileList','additionFile']:
  for name in boot.get(key,[]):

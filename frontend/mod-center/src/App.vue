@@ -37,10 +37,9 @@ let drag:{destroy():void}|undefined;
 async function bindDrag(){drag?.destroy();drag=undefined;await nextTick();if(!list.value||tab.value!=='local'||busy.value||query.value||pending.value)return;const s=state.value,order=[...managed.value];drag=runtime.DMCDrag.bind(list.value,{onDrop:(name:string,index:number)=>run(()=>api.move(s,name,s.enabled.indexOf(order[index])),true),onAnnounce:(text:string)=>notify(text)})}
 watch([tab,query,pending],()=>bindDrag());
 let previous:Element|null=null,oldOverflow='';
-async function open(){if(opened.value)return;previous=document.activeElement;runtime.DoLModCenter?.close();oldOverflow=document.body.style.overflow;document.body.style.overflow='hidden';opened.value=true;await nextTick();panel.value?.focus();await run(refresh)}
+async function open(){if(opened.value)return;previous=document.activeElement;oldOverflow=document.body.style.overflow;document.body.style.overflow='hidden';opened.value=true;await nextTick();panel.value?.focus();await run(refresh)}
 function release(){if(!opened.value)return;opened.value=false;pending.value=undefined;drag?.destroy();document.body.style.overflow=oldOverflow;(previous as HTMLElement)?.focus?.()}
 function close(){if(busy.value||runtime.DMCStorage.isBusy()||runtime.DMCRescue?.isBusy?.()){notify('请等待当前操作完成。');return}release()}
-function classic(){close();if(!opened.value)runtime.DMCClassicOpen?.()}
 function key(e:KeyboardEvent){if(!opened.value)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();if(pending.value)pending.value=undefined;else if(tab.value==='details')tab.value='local';else close()}if(e.key==='Tab'){const nodes=[...panel.value!.querySelectorAll<HTMLElement>('button,input,a[href],select,textarea,summary')].filter(n=>!n.hasAttribute('disabled')&&n.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&(document.activeElement===first||document.activeElement===panel.value)){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}}
 function back(e:Event){if(opened.value){e.preventDefault();e.stopImmediatePropagation();if(pending.value)pending.value=undefined;else if(tab.value==='details')tab.value='local';else close()}}
 onMounted(()=>{runtime.DMCNext={open,close,fail:release};document.addEventListener('backbutton',back,true)});
@@ -51,9 +50,9 @@ onBeforeUnmount(()=>{drag?.destroy();document.removeEventListener('backbutton',b
  <section ref="panel" class="next-window" role="dialog" aria-modal="true" aria-labelledby="next-title" tabindex="-1">
   <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>新版工作台 · 2.0 Preview</small></div></div>
    <nav aria-label="新版模组中心"><button v-for="t in tabs" :key="t.id" :class="{selected:tab===t.id}" :disabled="busy||!!pending" @click="tab=t.id"><span>{{t.icon}}</span><div>{{t.name}}<small>{{t.sub}}</small></div></button></nav>
-   <div class="next-nav-foot"><span class="next-dot" /> 本地运行 · 无需联网<button @click="classic" :disabled="busy">切回经典界面 ↗</button></div>
+   <div class="next-nav-foot"><span class="next-dot" /> 本地运行 · 无需联网</div>
   </aside>
-  <div class="next-main"><header><div><small class="next-eyebrow">WORKSPACE / {{ tab.toUpperCase() }}</small><h2 id="next-title">{{activeTitle}}</h2></div><button class="next-classic-mobile" :disabled="busy" @click="classic">经典界面</button><button aria-label="关闭新版模组中心" class="next-close" @click="close">×</button></header>
+  <div class="next-main"><header><div><small class="next-eyebrow">WORKSPACE / {{ tab.toUpperCase() }}</small><h2 id="next-title">{{activeTitle}}</h2></div><button aria-label="关闭模组中心" class="next-close" @click="close">×</button></header>
    <div class="next-notice" role="status" :class="{failure:error}">{{busy?'正在处理，请稍候…':message||'你的模组，你的配置。'}}<span v-if="changed"> · 更改需重启</span></div>
    <div v-if="pending" class="next-confirm" role="alertdialog" aria-label="确认配置修改"><p>{{pending.text}}</p><button @click="accept">确认</button><button @click="pending=undefined">取消</button></div>
    <main class="next-scroll dmc-content">
@@ -74,7 +73,7 @@ onBeforeUnmount(()=>{drag?.destroy();document.removeEventListener('backbutton',b
     <section v-if="tab==='details'"><div class="next-toolbar mc:flex mc:flex-wrap mc:gap-2"><button @click="tab='local'">← 返回列表</button><button v-if="detail&&state.packages.includes(detail.name)&&state.loaded.some(p=>p.name===detail!.name)" :disabled="busy" @click="details({name:detail!.name},!detail!.loaded)">{{detail.loaded?'查看本地包':'查看已挂载包'}}</button></div><p class="next-help">{{detail?.loaded?'本次运行包资料':'本地包资料，下次启动使用'}}</p><article ref="detailHost" class="next-detail" /></section>
     <LegacyPanel v-for="kind in ['diagnostics','backups','profiles','beauty']" :key="kind" :kind="kind" :api="api" :active="tab===kind&&opened" />
    </main>
-   <footer><span>Vue · TypeScript · 离线构建</span><span>预览版 / 保留经典界面</span></footer>
+   <footer><span>离线模组管理</span><span>本地配置工作台</span></footer>
   </div>
  </section>
 </div>

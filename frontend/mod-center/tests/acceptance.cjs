@@ -4,7 +4,7 @@ const root=path.resolve(__dirname,'..'),old=path.resolve(root,'../../mods/mod-ce
 (async()=>{const browser=await chromium.launch({headless:true,channel:'msedge'});try{
  const page=await browser.newPage({viewport:{width:1704,height:1136}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')console.log('BROWSER',m.text())});
- await page.goto(pathToFileURL(path.join(old,'tests/demo.html')).href);await page.waitForFunction(()=>window.__fixtureReady);
+ await page.goto(pathToFileURL(path.join(__dirname,'demo.html')).href);await page.waitForFunction(()=>window.__fixtureReady);
  await page.evaluate(()=>{window.nativeTestName='DMC_VUE_'+crypto.randomUUID();window.modLoaderKeyConfigWinHookFunction=c=>{c.config.set('ModLoader_IndexDBLoader',nativeTestName);c.config.set('keyval',nativeTestName);c.config.set('modDataIndexDBZipList','test-enabled');c.config.set('modDataIndexDBZipListHidden','test-disabled');c.config.set('modDataIndexDBZipPrefix','test-package')}});
  await page.addScriptTag({path:path.join(old,'tests/native-loader.fixture.js')});
  const packages={};for(const name of ['Alpha Content','Beta Theme','Gamma Disabled','Delta Import']){const z=new JSZip();z.file('boot.json',JSON.stringify({name,version:'1.0.0',scriptFileList:[],styleFileList:[],tweeFileList:[],imgFileList:[],additionFile:['README.md']}));z.file('README.md','# '+name+'\n\n**Offline** package readme.');packages[name]=Array.from(await z.generateAsync({type:'uint8array',compression:'DEFLATE'}))}
@@ -40,8 +40,8 @@ const root=path.resolve(__dirname,'..'),old=path.resolve(root,'../../mods/mod-ce
  await page.setViewportSize({width:390,height:844});
  for(const id of ['diagnostics','backups','profiles','beauty']){await page.evaluate(id=>{const buttons=[...document.querySelectorAll('.next-nav button')];buttons[['local','diagnostics','backups','profiles','beauty'].indexOf(id)].click()},id);const metrics=await ui.locator('.next-scroll').evaluate(e=>[e.scrollWidth,e.clientWidth]);assert.ok(metrics[0]<=metrics[1]+2,id+' mobile overflow');}
  await ui.getByRole('button',{name:/本地模组/}).click();
- await ui.getByRole('button',{name:'经典界面',exact:true}).click();assert.equal(await ui.isVisible(),false);assert.equal(await page.locator('.dmc-panel').isVisible(),true);await page.getByRole('button',{name:'打开新版界面',exact:true}).click();assert.equal(await ui.isVisible(),true);
+ assert.equal(await page.locator('.dmc-panel,.dmc-shell').count(),0,'classic shell is not mounted');assert.equal(await page.getByRole('button',{name:/经典界面|打开新版界面/}).count(),0);await page.evaluate(()=>DoLModCenter.close());assert.equal(await ui.isVisible(),false);await page.evaluate(()=>DoLModCenter.open());assert.equal(await ui.isVisible(),true);
  await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);await page.keyboard.press('Escape');assert.equal(await ui.isVisible(),false);await page.locator('#dmc-sidebar-button').click();await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);await page.evaluate(()=>document.dispatchEvent(new Event('backbutton',{cancelable:true})));assert.equal(await ui.isVisible(),false);
- assert.deepEqual(errors,[]);console.log('PASS Vue UI + native ZIP import/delete/toggle, keyboard/touch reorder, details, full backup restore, 5 viewports, classic fallback, Escape/Android back event; no page errors');
- await page.evaluate(()=>__fixture.cleanup());
+ assert.deepEqual(errors,[]);console.log('PASS Vue UI + native ZIP import/delete/toggle, keyboard/touch reorder, details, full backup restore, 5 viewports, Vue-only public open/close, Escape/Android back event; no page errors');
+ await page.evaluate(()=>DoLModCenter.destroy());assert.equal(await page.locator('#dmc-next-root,#dmc-sidebar-button').count(),0);assert.equal(await page.evaluate(()=>document.body.style.overflow),'');await page.evaluate(()=>__fixture.cleanup());
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
