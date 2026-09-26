@@ -1,0 +1,12 @@
+**/node_modules/
+**/dist/
+**/artifacts/
+**/test-results/
+**/__pycache__/
+**/native-loader.fixture.js
+releases/
+*.save
+*.apk
+*.p12
+*.jks
+.env*

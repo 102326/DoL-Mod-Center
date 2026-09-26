@@ -1,0 +1,43 @@
+{
+  "name": "DoLModCenter",
+  "version": "1.3.1",
+  "scriptFileList": [
+    "markdown.js",
+    "package-info.js",
+    "dependency-sort.js",
+    "mod-info.js",
+    "readme.js",
+    "storage.js",
+    "change-journal.js",
+    "diagnostics/vendor/diagnostics-core.js",
+    "diagnostics/vendor/diagnostics-sources.js",
+    "diagnostics/workbench-core.js",
+    "diagnostic-summary.js",
+    "diagnostics/workbench-ui.js",
+    "config-profiles.js",
+    "sidebar-entry.js",
+    "drag-order.js",
+    "emergency-ui.js",
+    "backup-ui.js",
+    "beauty-storage.js",
+    "beauty-ui.js",
+    "manager-ui.js"
+  ],
+  "styleFileList": [
+    "diagnostics/workbench.css",
+    "manager.css"
+  ],
+  "tweeFileList": [],
+  "imgFileList": [],
+  "additionFile": [
+    "README.md",
+    "LICENSE",
+    "diagnostics/LICENSE"
+  ],
+  "dependenceInfo": [
+    {
+      "modName": "ModLoader",
+      "version": ">=2.100.0"
+    }
+  ]
+}

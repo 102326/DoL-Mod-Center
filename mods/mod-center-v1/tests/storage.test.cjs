@@ -1,0 +1,56 @@
+'use strict';
+const assert=require('node:assert/strict'),path=require('node:path');
+const {pathToFileURL}=require('node:url');const {chromium}=require('playwright');
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'msedge'});
+ try {
+  const page=await browser.newPage();await page.goto(pathToFileURL(path.join(__dirname,'demo.html')).href);
+  await page.waitForFunction(()=>window.__fixtureReady);
+  const result=await page.evaluate(async()=>{
+   const api=DMCStorage.create(window), f=__fixture, results=[];
+   const eq=(a,b,label)=>{if(JSON.stringify(a)!==JSON.stringify(b))throw Error(label);results.push(label);};
+   const fail=async(fn,pattern)=>{try{await fn();throw Error('unexpected success');}catch(e){if(!pattern.test(e.message))throw e;results.push(pattern.source);}};
+   let state=await api.read();eq(state.enabled,['A','B'],'read actual persisted order');
+   state=await api.toggle(state,'A',false);eq(state.disabled,['C','A'],'disable atomically');
+   state=await api.toggle(state,'A',true);eq(state.enabled,['B','A'],'enable at end');
+   state=await api.move(state,'A',0);eq(state.enabled,['A','B'],'move preserves exact order');
+   const stale=state;
+   state=await api.install(await api.prepare(state,'D'),f.pack('D','2.0.0'));eq(state.enabled,['A','B','D'],'new import register');
+   await fail(()=>api.toggle(stale,'B',false),/配置已被/);
+   eq((await api.read()).enabled,state.enabled,'stale write has no side effects');
+   state=await api.install(await api.prepare(state,'C'),f.pack('C','2.0.0'));eq(state.disabled,['C'],'disabled update stays disabled');
+   eq((await api.details('C')).version,'2.0.0','stored metadata uses new package');
+   eq([...await api.exportZip('C')],[...f.pack('C','2.0.0')],'export exact bytes');
+   const before=await api.read();const deleteToken=await api.prepare(before,'D');const replaceToken=await api.prepare(before,'C');window.__failWrite=true;
+   await fail(()=>api.remove(deleteToken,'D'),/synthetic partial write/);window.__failWrite=false;
+   eq((await api.read()).revision,before.revision,'partial delete transaction rollback lists');
+   eq((await api.details('D')).version,'2.0.0','partial delete rollback package');
+   window.__failWrite=true;
+   await fail(()=>api.install(replaceToken,f.pack('C','3.0.0')),/synthetic partial write/);window.__failWrite=false;
+   eq((await api.details('C')).version,'2.0.0','partial replace rollback bytes');
+   await fail(()=>api.inspect(new Uint8Array([1,2,3])),/校验/);
+   state=await api.remove(await api.prepare(await api.read(),'D'),'D');eq(state.enabled,['A','B'],'delete lists verified');
+   await fail(()=>api.exportZip('D'),/缺失/);
+   await f.seed([['fixture-package:Orphan',f.pack('Orphan')]]);
+   state=await api.read();eq(state.orphans,['Orphan'],'orphan detected not autoenabled');
+   await api.toggle(state,'B',false);eq((await api.read()).orphans,['Orphan'],'unrelated orphan preserved');
+   await fail(async()=>api.remove(await api.prepare(await api.read(),'BuiltIn'),'BuiltIn'),/不能修改内置/);
+   state=await api.read();
+   const token=await api.prepare(state,'A');await f.seed([['fixture-package:A',f.pack('A','9.0.0')]]);
+   await fail(()=>api.remove(token,'A'),/目标包.*替换/);
+   await fail(()=>api.install(token,f.pack('A','10.0.0')),/目标包.*替换/);
+   eq((await api.details('A')).version,'9.0.0','foreign replacement preserved');
+   modUtils.version='2.999.0';eq((await api.read()).writable,false,'unknown version readonly');
+   await fail(()=>api.toggle(state,'A',false),/禁止写入/);modUtils.version='2.101.1';
+   const a=DMCStorage.create(window),b=DMCStorage.create(window);
+   const concurrent=await Promise.allSettled([a.toggle(state,'B',true),b.toggle(state,'C',true)]);
+   eq(concurrent.filter(x=>x.status==='fulfilled').length,1,'cross-instance stale transaction rejected');
+   await f.seed([['enabled-custom','broken']]);await fail(()=>api.read(),/格式异常/);
+   await fail(()=>api.toggle(state,'C',true),/格式异常/);
+   await f.seed([['enabled-custom',JSON.stringify(['A','A'])]]);await fail(()=>api.read(),/格式异常/);
+   await f.seed([['enabled-custom','[]'],['disabled-custom',undefined]]);eq((await api.read()).disabled,[],'missing hidden list treated empty');
+   await f.cleanup();return results;
+  });
+  assert.ok(result.length>=20);console.log('PASS '+result.length+' native IndexedDB assertions\n'+result.join('\n'));
+ } finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

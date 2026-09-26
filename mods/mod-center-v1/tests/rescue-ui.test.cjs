@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{pathToFileURL}=require('node:url'),{chromium}=require('playwright');
+(async()=>{const browser=await chromium.launch({headless:true,channel:'msedge'});try{
+ const page=await browser.newPage({acceptDownloads:true,viewport:{width:390,height:844}});
+ await page.addInitScript(()=>{try{localStorage.setItem('DoLModCenter.sidebar.v1',JSON.stringify({showCompact:true}));}catch(_){}});
+ await page.goto(pathToFileURL(path.join(__dirname,'demo.html')).href);await page.waitForFunction(()=>window.__fixtureReady);
+ await page.evaluate(async()=>{const api=DMCJournal.wrap(DMCStorage.create()),state=await api.read();await api.move(await api.prepare(state,'B'),'B',0);await __fixture.seed([['disabled-custom','broken'],['fixture-package:Bad',new Uint8Array([1,2])]]);});
+ await page.locator('#dmc-sidebar-button').click();await page.getByRole('button',{name:'完整备份',exact:true}).click();
+ const downloaded=page.waitForEvent('download');await page.getByRole('button',{name:'紧急导出可读内容',exact:true}).click();
+ const report=JSON.parse(fs.readFileSync(await (await downloaded).path(),'utf8'));
+ assert.equal(report.schema,'DoLModCenter.emergency.v1');assert.equal(report.restorable,false);assert.ok(report.issues.length);assert.equal(report.recentChanges[0].kind,'move');assert.ok(report.diagnostics.includes('DoL'));
+ assert.ok(report.packages.some(p=>p.name==='Bad'&&p.data));assert.equal(await page.locator('#dmc-compact-button').count(),0);
+ await page.getByRole('button',{name:'运行诊断',exact:true}).click();await page.getByText('错误摘要',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'关闭',exact:true}).first().click();
+ await page.evaluate(()=>{modModLoadController.addLifeTimeCircleHook=()=>{};});
+ await page.addScriptTag({path:path.join(__dirname,'../src/startup.js')});
+ await page.evaluate(()=>{window.__gatePromise=DMCStartup.wait();});
+ const next=page.waitForEvent('download');await page.locator('#dmc-startup').getByRole('button',{name:'紧急导出可读内容'}).click();
+ assert.equal(JSON.parse(fs.readFileSync(await (await next).path(),'utf8')).schema,'DoLModCenter.emergency.v1');
+ await page.evaluate(()=>__fixture.cleanup());console.log('PASS malformed storage manager export and startup export with report/history, summary UI, compact retired');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

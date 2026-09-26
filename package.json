@@ -1,0 +1,11 @@
+{
+  "name": "dol-mod-center-repository",
+  "private": true,
+  "scripts": {
+    "test": "node scripts/test.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1",
+    "jszip": "3.10.1"
+  }
+}
