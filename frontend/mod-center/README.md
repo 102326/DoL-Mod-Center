@@ -1,10 +1,10 @@
-# 模组中心 2.0 Preview 2 — Vue 前端
+# 模组中心 2.0.0 正式版 — Vue 前端
 
 独立前端工程：Vue 3 + TypeScript + Vite + Tailwind CSS。用户已明确授权引入框架，取代旧版 README 中“不新增运行时库”的限制。运行库随 ZIP 离线打包，不使用 CDN、不需要服务器。
 
 ## 使用
 
-安装 DoLModCenter-2.0.0-preview.2.mod.zip 替换旧模组中心，重启后通过原“模组中心”入口打开。请勿并装两个版本。保留 1.3.1 ZIP 便于回退。
+安装 DoLModCenter-2.0.0.mod.zip 替换旧模组中心，重启后通过原“模组中心”入口打开。请勿并装两个版本。保留 1.3.1 ZIP 便于回退。
 
 新版主导航、本地模组列表、确认流程、搜索、详情导航由 Vue 实现；Markdown/详情渲染、拖拽、诊断、备份恢复、快照、美化 type 页面复用已有模块，尚未全部转换成 Vue 组件。通过原生存储接口执行事务，不修改存档结构。
 
@@ -14,10 +14,10 @@
 
 - `npm ci` 安装锁定依赖。
 - `npm run build` 执行 TypeScript 检查并输出独立 ui.js/ui.css。
-- `npm run package` 打包旧版明确声明的资产和新界面，只写此预览版 ZIP。
-- `node tests/acceptance.cjs` 需要 Playwright；可通过工作区 NODE_PATH 提供。仅临时隔离数据库，不使用真实存档。
+- `npm run package` 打包旧版明确声明的资产和新界面，只写当前版本 ZIP。
+- `node tests/acceptance.cjs` 需要 Playwright；在仓库根目录 npm ci 安装。仅临时隔离数据库，不使用真实存档。
 
-Tailwind 未引入 Preflight，工具类有 mc 前缀，自定义样式限定在 .dmc-next。构建不改变上游 HTML、稳定版源码或 APK。2.0-preview 先迁移管理器，游戏主界面与战斗界面不在本次交付中。
+Tailwind 未引入 Preflight，工具类有 mc 前缀，自定义样式限定在 .dmc-next。构建不改变上游 HTML、稳定版源码或 APK。2.0 先迁移管理器，游戏主界面与战斗界面不在本次交付中。
 
 ## 备份边界
 

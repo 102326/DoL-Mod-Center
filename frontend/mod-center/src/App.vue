@@ -48,12 +48,11 @@ onBeforeUnmount(()=>{drag?.destroy();document.removeEventListener('backbutton',b
 <template>
 <div v-show="opened" class="dmc-next" @keydown="key">
  <section ref="panel" class="next-window" role="dialog" aria-modal="true" aria-labelledby="next-title" tabindex="-1">
-  <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>新版工作台 · 2.0 Preview</small></div></div>
+  <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>新版工作台 · 2.0</small></div></div>
    <nav aria-label="新版模组中心"><button v-for="t in tabs" :key="t.id" :class="{selected:tab===t.id}" :disabled="busy||!!pending" @click="tab=t.id"><span>{{t.icon}}</span><div>{{t.name}}<small>{{t.sub}}</small></div></button></nav>
-   <div class="next-nav-foot"><span class="next-dot" /> 本地运行 · 无需联网</div>
   </aside>
   <div class="next-main"><header><div><small class="next-eyebrow">WORKSPACE / {{ tab.toUpperCase() }}</small><h2 id="next-title">{{activeTitle}}</h2></div><button aria-label="关闭模组中心" class="next-close" @click="close">×</button></header>
-   <div class="next-notice" role="status" :class="{failure:error}">{{busy?'正在处理，请稍候…':message||'你的模组，你的配置。'}}<span v-if="changed"> · 更改需重启</span></div>
+   <div v-if="busy||message||changed" class="next-notice" role="status" :class="{failure:error}">{{busy?'正在处理，请稍候…':message}}<span v-if="changed">{{busy||message?' · ':''}}更改需重启</span></div>
    <div v-if="pending" class="next-confirm" role="alertdialog" aria-label="确认配置修改"><p>{{pending.text}}</p><button @click="accept">确认</button><button @click="pending=undefined">取消</button></div>
    <main class="next-scroll dmc-content">
     <section v-if="tab==='local'">

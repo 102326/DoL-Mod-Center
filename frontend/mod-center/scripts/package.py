@@ -4,7 +4,7 @@ root=Path(__file__).resolve().parent.parent
 project=root.parent.parent
 legacy=project/'mods/mod-center-v1/src'
 boot=json.loads((legacy/'boot.json').read_text(encoding='utf-8'))
-boot['version']='2.0.0-preview.2'
+boot['version']='2.0.0'
 boot['scriptFileList']=[name for name in boot['scriptFileList'] if name!='manager-ui.js']
 assets={}
 for key in ['scriptFileList','styleFileList','tweeFileList','imgFileList','additionFile']:
@@ -33,7 +33,7 @@ with zipfile.ZipFile(out) as z:
  assert set(z.namelist())==set(assets)
  assert all(z.read(k)==v for k,v in assets.items())
 release=project/'releases/mods'/name
-# Rebuilding a preview explicitly replaces only this preview artifact, not stable releases.
+# Build only the artifact matching the declared version.
 release.parent.mkdir(parents=True,exist_ok=True)
 release.write_bytes(out.read_bytes())
 print(json.dumps({'file':str(release),'bytes':out.stat().st_size,'sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'members':len(assets)}))

@@ -4,10 +4,10 @@
 
 ## 下载与安装
 
-推荐使用 [2.0 界面版本](https://github.com/102326/DoL-Mod-Center/releases/tag/v2.0.0-preview.2)。从本仓库 Releases 下载 ZIP，通过现有游戏的 ModLoader 导入，替换旧版同名 DoLModCenter 后重启。不要并装两版管理器。推荐在修改模组前单独导出游戏存档。
+推荐使用 [2.0 正式版](https://github.com/102326/DoL-Mod-Center/releases/tag/v2.0.0)。从本仓库 Releases 下载 ZIP，通过现有游戏的 ModLoader 导入，替换旧版同名 DoLModCenter 后重启。不要并装两版管理器。推荐在修改模组前单独导出游戏存档。
 
 - **1.3.1 历史版**：保留下载供外部回退，不再作为新版内置界面。
-- **2.0.0-preview.2**：2.0 成为唯一管理界面，移除经典界面入口及自动回退；诊断、备份等继续复用共享模块。界面初始化失败时显示错误提示并允许重试，不自动修改配置或重启游戏。
+- **2.0.0**：正式版统一诊断与美化图层的炭黑淡紫样式，移除默认标语和侧栏离线注释。2.0 成为唯一管理界面，移除经典界面入口及自动回退；诊断、备份等继续复用共享模块。界面初始化失败时显示错误提示并允许重试，不自动修改配置或重启游戏。
 
 需要游戏已有 ModLoader，不依赖 maplebirch 或 ModHub。当前存储写入适配仅对已验证的 **ModLoader 2.101.1** 开放；其他版本可能只读。不要将本项目视为任意游戏版本/模组组合的兼容保证。
 
@@ -30,7 +30,7 @@
 ```sh
 # 经典版
 python mods/mod-center-v1/build.py
-# Vue 预览版
+# Vue 正式版
 cd frontend/mod-center
 npm ci
 npm run package
