@@ -4,7 +4,7 @@ root=Path(__file__).resolve().parent.parent
 project=root.parent.parent
 legacy=project/'mods/mod-center-v1/src'
 boot=json.loads((legacy/'boot.json').read_text(encoding='utf-8'))
-boot['version']='2.0.0'
+boot['version']=json.loads((root/'package.json').read_text(encoding='utf-8'))['version']
 boot['scriptFileList']=[name for name in boot['scriptFileList'] if name!='manager-ui.js']
 assets={}
 for key in ['scriptFileList','styleFileList','tweeFileList','imgFileList','additionFile']:
@@ -20,7 +20,7 @@ for name in ['vue','tailwindcss'] + ['@vue/'+p.name for p in sorted((root/'node_
  license=next(iter(folder.glob('LICENSE*')))
  notices.append(name+'\n'+license.read_text(encoding='utf-8'))
 assets['THIRD-PARTY-NOTICES.txt']='\n\n'.join(notices).encode()
-assets['README.md']=(root/'README.md').read_bytes()
+assets['README.md']=(project/'README.md').read_bytes()
 boot['additionFile'].append('THIRD-PARTY-NOTICES.txt')
 assets['boot.json']=json.dumps(boot,ensure_ascii=False,indent=2).encode()
 name='DoLModCenter-'+boot['version']+'.mod.zip'

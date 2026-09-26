@@ -2,7 +2,9 @@
   "name": "dol-mod-center-repository",
   "private": true,
   "scripts": {
-    "test": "node scripts/test.cjs"
+    "test": "node scripts/test.cjs",
+    "build": "npm --prefix frontend/mod-center run build",
+    "package": "npm --prefix frontend/mod-center run package"
   },
   "devDependencies": {
     "playwright": "1.62.1",

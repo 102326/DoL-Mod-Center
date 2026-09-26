@@ -1,41 +1,49 @@
-# 模组中心 2.0.0 正式版 — Vue 前端
+# Mod Center 2.0 前端
 
-独立前端工程：Vue 3 + TypeScript + Vite + Tailwind CSS。用户已明确授权引入框架，取代旧版 README 中“不新增运行时库”的限制。运行库随 ZIP 离线打包，不使用 CDN、不需要服务器。
+这里是 DoL Mod Center 的 Vue 前端工程，使用 Vue 3、TypeScript、Vite 和 Tailwind CSS。前端负责管理器界面；存储、诊断、备份和 type 图层等共享能力通过 `mods/mod-center-v1/src/` 中的模块接入。修改共享模块时必须保持原有事务与备份边界。
 
-## 使用
+运行库会随模组 ZIP 离线打包，不使用 CDN，也不需要服务器。构建工具只用于开发和打包，不进入游戏运行时。
 
-安装 DoLModCenter-2.0.0.mod.zip 替换旧模组中心，重启后通过原“模组中心”入口打开。请勿并装两个版本。保留 1.3.1 ZIP 便于回退。
+## 本地构建
 
-新版主导航、本地模组列表、确认流程、搜索、详情导航由 Vue 实现；Markdown/详情渲染、拖拽、诊断、备份恢复、快照、美化 type 页面复用已有模块，尚未全部转换成 Vue 组件。通过原生存储接口执行事务，不修改存档结构。
+环境要求 Node.js 22.12+、Python 3.10+。在仓库根目录执行：
 
-2.0 为唯一管理界面，手机顶部导航可横向滑动。新版包不加载旧 manager-ui.js，不再创建经典外壳或提供经典切换；诊断、备份、快照等继续使用共享功能模块。初始化错误显示提示和重试入口，不自动退回旧界面。
+```powershell
+npm ci
+npm --prefix frontend/mod-center ci
+npm run package
+```
 
-## 构建
+根目录脚本会调用本目录的类型检查、生产构建和打包流程。直接在本目录调试时，也可以执行：
 
-- `npm ci` 安装锁定依赖。
-- `npm run build` 执行 TypeScript 检查并输出独立 ui.js/ui.css。
-- `npm run package` 打包旧版明确声明的资产和新界面，只写当前版本 ZIP。
-- `node tests/acceptance.cjs` 需要 Playwright；在仓库根目录 npm ci 安装。仅临时隔离数据库，不使用真实存档。
+```powershell
+npm ci
+npm run typecheck
+npm run build
+npm run package
+```
 
-Tailwind 未引入 Preflight，工具类有 mc 前缀，自定义样式限定在 .dmc-next。构建不改变上游 HTML、稳定版源码或 APK。2.0 先迁移管理器，游戏主界面与战斗界面不在本次交付中。
+构建输出写入 `frontend/mod-center/dist/`；模组 ZIP 会复制到 `releases/mods/`。不要把 `node_modules`、游戏 HTML、存档或真实模组包加入发布包。
 
-## 备份边界
+## 代码边界
 
-完整备份沿用 full.v2，包含存储包体及启停顺序，记录依赖的预载名称/版本；不包含存档、本体、内嵌包体、type 配置或缓存。紧急导出仍不直接恢复。
+- Vue 页面、导航和界面样式位于本目录的 `src/`。
+- 共享存储、诊断、备份、快照和图层逻辑位于 `mods/mod-center-v1/src/`，保持相对路径和现有接口。
+- 管理器界面、共享模块和打包流程各自保持清晰边界；不改游戏存档结构、游戏本体或 APK。
+- 完整备份使用 `full.v2`：不包含存档、游戏本体、内嵌包体、type 数据库或缓存。紧急导出不可直接恢复。
 
-## 第三方许可
+## 测试
 
-THIRD-PARTY-NOTICES.txt 包含随包携带的 Vue/Tailwind 许可。构建工具与 node_modules 不打入 ZIP。
+根目录 `npm test` 运行隔离的合成测试。需要浏览器验收时，先准备 Microsoft Edge 浏览器并准备本地游戏 HTML fixture：
 
-## 架构与体积记录
+```powershell
+npx playwright install msedge
+python scripts/prepare-native.py PATH_TO_GAME_HTML
+node frontend/mod-center/tests/acceptance.cjs
+node frontend/mod-center/tests/shell.cjs
+node frontend/mod-center/tests/panels.cjs
+```
 
-- Vite 使用 library IIFE 输出，Vue 运行库编入 ui.js，生产常量在构建时替换，无 Node process 运行时依赖。
-- Tailwind 仅导入 theme/utilities，未引入 Preflight；参考 https://tailwindcss.com/docs/preflight 和 https://vite.dev/guide/build.html#library-mode 。
-- 2026-09-26 静态扫描上游 HTML：81,383,868 字节（约 77.6 MiB）；27 个内嵌 ZIP 的 Base64 字符串合计 27,858,192 字符。文件大不全是界面代码，本次不拆分它，也不宣称启动性能改善。
-- 新前端新增 JS 约 78 KB、CSS 约 8 KB（未压缩）；最终 ZIP 携带共用功能模块，但不携带经典管理外壳。依赖锁定在 package-lock.json。
+fixture 只在本机生成并被 Git 忽略。浏览器测试通过只说明隔离环境行为正确，不能替代 Android 实机、物理触控或全部模组组合验收。
 
-## 本轮验收
-
-通过 TypeScript 检查和生产构建；Edge 隔离数据库 + 原生加载器 fixture 验证实际 ZIP 导入、删除、启停、Markdown 详情、键盘/合成触控排序、完整备份恢复、2.0 公共入口开关与清理、Escape 和模拟 Android backbutton。
-五种 CSS 视口：390×844、844×390、1704×1136、1136×1704、1440×900；全部检查窗口边界和横向溢出，另检查各功能页手机宽度。截图为测试包，不代表真实游戏实测。
-测试不访问真实游戏数据库或存档；Android APK、实际多模组游戏页面和物理触控仍待实机验收。
+第三方运行库许可随包写入 `THIRD-PARTY-NOTICES.txt`。生产包不包含构建工具和 `node_modules`。

@@ -1,58 +1,74 @@
-# DoL Mod Center / 模组中心
+# DoL Mod Center
 
-面向 DoL ModLoader 的本地模组管理工具：离线管理、运行诊断、配置快照、备份恢复。没有在线市场，不自动下载模组。
+[![Latest release](https://img.shields.io/github/v/release/102326/DoL-Mod-Center?label=release)](https://github.com/102326/DoL-Mod-Center/releases/latest)
+[![License](https://img.shields.io/github/license/102326/DoL-Mod-Center)](https://github.com/102326/DoL-Mod-Center/blob/main/LICENSE)
 
-## 下载与安装
+面向 **Degrees of Lewdity ModLoader** 的本地模组管理器。它帮助你在游戏内整理本地 ZIP、查看运行诊断、保存配置快照，并在需要时备份与恢复本地模组配置及包体。项目坚持离线工作：没有在线市场，也不会自动下载或安装模组。
 
-推荐使用 [2.0 正式版](https://github.com/102326/DoL-Mod-Center/releases/tag/v2.0.0)。从本仓库 Releases 下载 ZIP，通过现有游戏的 ModLoader 导入，替换旧版同名 DoLModCenter 后重启。不要并装两版管理器。推荐在修改模组前单独导出游戏存档。
+> [!TIP]
+> 第一次使用前，请先保留游戏存档和重要模组包的独立副本。先看[安装说明](#安装与依赖)和[备份边界](#备份边界)，再导入 ZIP。
 
-- **1.3.1 历史版**：保留下载供外部回退，不再作为新版内置界面。
-- **2.0.0**：正式版统一诊断与美化图层的炭黑淡紫样式，移除默认标语和侧栏离线注释。2.0 成为唯一管理界面，移除经典界面入口及自动回退；诊断、备份等继续复用共享模块。界面初始化失败时显示错误提示并允许重试，不自动修改配置或重启游戏。
+## 目录
 
-需要游戏已有 ModLoader，不依赖 maplebirch 或 ModHub。当前存储写入适配仅对已验证的 **ModLoader 2.101.1** 开放；其他版本可能只读。不要将本项目视为任意游戏版本/模组组合的兼容保证。
+- [功能](#功能)
+- [安装与依赖](#安装与依赖)
+- [使用](#使用)
+- [备份边界](#备份边界)
+- [验证范围](#验证范围)
+- [反馈](#反馈)
+- [更新日志](#更新日志)
+- [许可与链接](#许可与链接)
 
-## 功能与边界
+## 功能
 
-- 导入、校验、更新、启停、删除、导出本地 ZIP；拖拽排序；依赖排序预览。
-- 预载来源识别、包内 README/Markdown、作者和 Wiki 信息链接。
-- 运行诊断、配置变更记录、名单快照、美化 type 图层管理。
-- 存储变更使用事务及并发快照校验；完整恢复包含校验与提交后回读。
-- `full.v2` 完整备份包含存储 ZIP、启停顺序及预载版本引用。**不包含游戏存档、本体、内嵌包体、type 数据库或缓存**；预载需目标游戏提供相应版本。
-- 紧急导出尽力保留可读数据，不能直接作为完整恢复文件。
-- 普通模组 ZIP 在加载后提供入口，不会自动给 APK 添加启动前救援功能。
+- 导入、校验、更新、启用、停用、删除和导出本地 ZIP。
+- 拖拽调整启用顺序，并预览基于依赖声明的排序结果。
+- 查看包内版本、作者、README/Markdown、依赖和 Wiki 等资料链接。
+- 识别加载器报告的预载模组，并对只读来源保持只读。
+- 查看运行诊断、配置变更记录、启停名单快照和 BeautySelectorAddon 的 type 图层。
+- 通过事务、并发快照检查和恢复后回读校验保护管理器数据。
 
-## 源码与构建
+## 安装与依赖
 
-仓库只包含本工具源码与合成测试，不包含游戏、第三方内容模组、用户存档或签名材料。
+1. 从 [Latest release](https://github.com/102326/DoL-Mod-Center/releases/latest) 下载 `DoLModCenter-2.0.0.mod.zip`。
+2. 确认游戏已经安装并启用 **ModLoader**。本项目不要求 maplebirch 或 ModHub，也不会替你获取模组。
+3. 在 ModLoader 中导入 ZIP，替换同名的 DoL Mod Center，然后重启游戏。
+4. 从游戏侧栏的“模组中心”入口打开管理器。
 
-环境：Node.js 22.12+、npm、Python 3.10+。经典版使用 JavaScript/CSS，Vue 前端使用 TypeScript/Vite/Tailwind；Python 只负责打包，不参与游戏运行。运行库离线随包携带。
+当前已验证的写入适配为 **ModLoader 2.101.1**；其他版本可能只能查看，无法安全写入。管理器包不包含游戏、存档、签名材料或第三方内容模组。
 
-```sh
-# 经典版
-python mods/mod-center-v1/build.py
-# Vue 正式版
-cd frontend/mod-center
-npm ci
-npm run package
-```
+## 使用
 
-经典包位于 `mods/mod-center-v1/dist/`，Vue 包位于 `frontend/mod-center/dist/` 及 `releases/mods/`。
+在“本地模组”中导入你已经取得的 ZIP，确认后再调整启停状态或加载顺序。配置变化通常需要重启游戏才会由加载器应用。详情页只读取包内资料和加载器提供的运行信息，外部链接由你主动点击打开。
 
-## 测试
+备份前先让游戏完成加载，以便加载器确认预载来源。恢复前保留当前配置副本，并确保目标游戏仍提供备份所引用的预载版本。不要让其他管理器同时修改同一份配置。
 
-在仓库根目录 `npm ci`，然后 `npx playwright install msedge`（或使用已有 Microsoft Edge）。`npm test` 运行合成存储/元数据/诊断等基础测试，数据库与实际游戏隔离。
+## 备份边界
 
-原生加载器测试需要自己提供本地游戏 HTML，提取的 fixture 已被 Git 忽略，不随项目分发：
+`DoLModCenter.full.v2` 保存本地模组 ZIP、启停名单、顺序和预载名称/版本引用。预载资源本身不在备份中，恢复时必须由目标游戏提供相同版本。
 
-```sh
-python scripts/prepare-native.py PATH_TO_GAME_HTML
-node mods/mod-center-v1/tests/native-backup.test.cjs
-# 先构建 Vue 前端
-node frontend/mod-center/tests/acceptance.cjs
-```
+完整备份**不包含**游戏存档、游戏本体、内嵌包体、美化 type 数据库或缓存。`DoLModCenter.emergency.v1` 只尽力保留可读包体、配置摘要和诊断信息，并标记为不可恢复；它不能替代完整备份。
 
-浏览器自动化通过不等于真实 Android 物理触控或所有模组组合通过。报告问题请提供版本、复现步骤与诊断摘要，勿在公开 issue 上传私人存档或完整备份。
+## 验证范围
 
-## 许可与来源
+项目包含隔离浏览器和原生加载器 fixture 测试，覆盖导入、删除、启停、排序、详情、完整备份恢复和手机、平板及 PC 的五种模拟视口。测试使用合成数据，不读取你的存档或真实游戏数据库。
 
-本项目代码采用 MIT，详见 LICENSE；诊断模块源自本项目此前的 DoLWorkbench / DoLDiagnostics。Vue/Tailwind 等依赖各自许可保留在打包后的 THIRD-PARTY-NOTICES.txt。运行时调用游戏/加载器提供的接口，其实现不在本仓库分发。本包不含 ModHub 或 NeoUI 源码。
+这些结果不等同于 Android 实机、物理触控、任意 DoL 版本或全部模组组合的兼容证明。
+
+## 反馈
+
+请在 [Issues](https://github.com/102326/DoL-Mod-Center/issues) 提供管理器版本、ModLoader 版本、复现步骤和诊断摘要。请勿上传私人存档、完整备份或包含个人数据的日志。
+
+## 更新日志
+
+见 [UPDATE.md](https://github.com/102326/DoL-Mod-Center/blob/main/UPDATE.md)。开发者可阅读 [前端构建说明](https://github.com/102326/DoL-Mod-Center/blob/main/frontend/mod-center/README.md)。当前公开基线为 2.0.0 正式版。
+
+## 许可与链接
+
+代码采用 [MIT License](https://github.com/102326/DoL-Mod-Center/blob/main/LICENSE)。
+
+- [GitHub 仓库](https://github.com/102326/DoL-Mod-Center)
+- [最新发行版](https://github.com/102326/DoL-Mod-Center/releases/latest)
+- [问题反馈](https://github.com/102326/DoL-Mod-Center/issues)
+
+DoL、ModLoader 及其他第三方项目仍归其各自作者所有。本仓库只分发管理器源码与构建所需文件，不分发游戏内容。
