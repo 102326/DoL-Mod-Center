@@ -2,8 +2,9 @@ export interface ModInfo {name:string;version?:string;bootJson?:Record<string,un
 export interface State {enabled:string[];disabled:string[];packages:string[];loaded:ModInfo[];preloaded:ModInfo[];missing:string[];orphans:string[];revision:string;writable:boolean;reason?:string}
 export interface Catalog {items:ModInfo[];preloaded:ModInfo[];enabled:string[];disabled:string[]}
 export type Token=object;
+export interface BatchOrderContext {enabled:string[];disabled:string[];items:ModInfo[];preloaded:ModInfo[];fixedNames:string[]}
 export interface Storage {
- prepareInstallBatch(state:State,inputs:Uint8Array[]):Promise<{items:ModInfo[];names:string[];enabled:string[];disabled:string[]}>;
+ prepareInstallBatch(state:State,inputs:Uint8Array[],options?:{order:(context:BatchOrderContext)=>string[]|Promise<string[]>}):Promise<{items:ModInfo[];names:string[];enabled:string[];disabled:string[]}>;
  installBatch(token:object):Promise<State>;readRecovery():Promise<any>;prepareRecovery():Promise<object>;rollbackRecovery(token:object):Promise<State>;dismissRecovery(id:string):Promise<void>;
  read():Promise<State>;catalog(state:State):Promise<Catalog>;
  prepare(state:State,name:string):Promise<Token>;inspect(bytes:Uint8Array):Promise<ModInfo>;

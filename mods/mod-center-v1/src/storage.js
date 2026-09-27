@@ -430,7 +430,7 @@
       return digest(new TextEncoder().encode(JSON.stringify([raw.rawEnabled,raw.rawDisabled,raw.enabled,raw.disabled,signatures])));
     }
     // Only this installer creates a recovery point. Lists, new ZIPs and old ZIPs commit together.
-    async function prepareInstallBatch(snapshot, inputs){
+    async function prepareInstallBatch(snapshot, inputs, options={}){
       if(!Array.isArray(inputs)||!inputs.length||inputs.length>100)throw Error('一次请选择 1–100 个 ZIP。');
       const c=contract();if(c.utils.version!=='2.101.1')throw Error('当前加载器只读。');
       const packages=[],items=[],names=new Set();let total=0;
@@ -441,6 +441,21 @@
       if(before.recovery!==undefined)throw Error('存在未处理的启动恢复点，请先在备份与恢复中确认保留当前配置或撤销上次导入。');
       const next={enabled:[...before.enabled],disabled:[...before.disabled],packages:before.packages.filter(p=>!names.has(p.name)).concat(packages).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)};
       for(const p of packages)if(!next.enabled.includes(p.name)&&!next.disabled.includes(p.name))next.enabled.push(p.name);
+      if(options.order!==undefined){
+        if(typeof options.order!=='function')throw Error('排序计划无效。');
+        const decorated=decorateState(c,{...next,packages:next.packages.map(p=>p.name)});
+        const fixedNames=decorated.preloaded.filter(p=>!next.packages.some(x=>x.name===p.name)).map(p=>p.name),allItems=[];
+        for(const p of next.packages){
+          let info=items.find(item=>item.name===p.name);
+          if(!info){const cached=metadataCache.get(p.name);info=cached&&sameBytes(cached.bytes,p.bytes)?cached.info:await inspect(p.bytes);}
+          if(info.name!==p.name)throw Error('包内名称与登记名称不一致：'+p.name);
+          allItems.push(info);
+        }
+        const proposed=await options.order(JSON.parse(JSON.stringify({enabled:next.enabled,disabled:next.disabled,items:allItems,preloaded:decorated.preloaded,fixedNames})));
+        if(!Array.isArray(proposed)||proposed.length!==next.enabled.length||new Set(proposed).size!==proposed.length||proposed.some(n=>!next.enabled.includes(n)))throw Error('排序名单不是启用列表的完整排列。');
+        if(next.enabled.some((name,index)=>fixedNames.includes(name)&&proposed[index]!==name))throw Error('不能移动预载模组的固定位置。');
+        next.enabled=[...proposed];
+      }
       parseList(JSON.stringify(next.enabled),'导入启用列表');parseList(JSON.stringify(next.disabled),'导入禁用列表');
       next.rawEnabled=JSON.stringify(next.enabled);next.rawDisabled=JSON.stringify(next.disabled);
       bounded(next);
@@ -453,6 +468,7 @@
     async function installBatch(token){
       const plan=batchTokens.get(token);if(!plan)throw Error('请重新检查导入包。');
       if(busy)throw Error('已有存储操作进行中。');busy=true;activeWrites++;
+      let committed=false;
       try{const c=contract();if(c.utils.version!=='2.101.1')throw Error('当前加载器只读。');
         await allPackages(c,'readwrite',(store,current)=>{
           if(current.recovery!==undefined||current.rawEnabled!==plan.before.rawEnabled||current.rawDisabled!==plan.before.rawDisabled||!sameSnapshot(current,plan.before))throw Error('确认期间配置或包体已变化，请重新导入。');
@@ -460,9 +476,17 @@
           for(const p of plan.next.packages)if(plan.record.previous.some(x=>x.name===p.name))store.put(p.bytes,c.key(p.name));
           store.put(JSON.stringify(plan.next.enabled),c.enabledKey);store.put(JSON.stringify(plan.next.disabled),c.disabledKey);
         });batchTokens.delete(token);
+        committed=true;
         const after=await allPackages(c,'readonly',(_,s)=>s);
         if(after.rawEnabled!==plan.next.rawEnabled||after.rawDisabled!==plan.next.rawDisabled||!sameSnapshot(after,plan.next)||JSON.stringify(after.recovery)!==JSON.stringify(plan.record))throw Error('导入已提交，但回读发现变化；请检查恢复点。');
-        return read();
+        return await read();
+      }catch(error){
+        if(committed){
+          if(error&&typeof error==='object'){
+            try{error.committed=true}catch(_){const wrapped=Error(String(error));wrapped.committed=true;error=wrapped;}
+          }else {const wrapped=Error(String(error));wrapped.committed=true;error=wrapped;}
+        }
+        throw error;
       }finally{busy=false;activeWrites--;}
     }
     function recoverySummary(record){

@@ -43,8 +43,8 @@ const root=path.resolve(__dirname,'..'),old=path.resolve(root,'../../mods/mod-ce
  // Native ZIP download/restore via reused backup flow inside Vue.
  await ui.getByRole('button',{name:/备份与恢复/}).click();const wait=page.waitForEvent('download');await ui.getByRole('button',{name:'导出当前完整备份',exact:true}).click();const saved=await(await wait).path();assert.equal(JSON.parse(fs.readFileSync(saved,'utf8')).schema,'DoLModCenter.full.v2');
  await ui.getByLabel('选择完整备份').setInputFiles(saved);await ui.getByText('校验通过。确认后整体替换；生效需要重启。',{exact:true}).waitFor();await ui.getByLabel('已保存刚导出的当前备份',{exact:false}).check();await ui.getByRole('button',{name:'恢复这份备份',exact:true}).click();await ui.getByText('恢复已提交并回读核验。请重启游戏，当前会话仍是恢复前的模组。',{exact:true}).waitFor();
- await ui.locator('summary').filter({hasText:'配置快照（保存常用搭配）'}).click();await ui.getByRole('button',{name:/诊断助手/}).click();await ui.getByRole('button',{name:'开始检查',exact:true}).click();await ui.getByRole('button',{name:/本地模组/}).click();await ui.getByRole('button',{name:'美化图层',exact:true}).click();await ui.getByRole('button',{name:'模组列表',exact:true}).click();
- await ui.getByRole('button',{name:/本地模组/}).click();await ui.getByRole('button',{name:'刷新',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);
+ await ui.locator('summary').filter({hasText:'配置快照（保存常用搭配）'}).click();await ui.getByRole('button',{name:/诊断助手/}).click();await ui.getByRole('button',{name:'开始检查',exact:true}).click();await ui.locator('.next-nav').getByRole('button',{name:/本地模组/}).click();await ui.getByRole('button',{name:'美化图层',exact:true}).click();await ui.getByRole('button',{name:'模组列表',exact:true}).click();
+ await ui.locator('.next-nav').getByRole('button',{name:/本地模组/}).click();await ui.getByRole('button',{name:'刷新',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);
  // Responsive and reduced-motion acceptance, CSS viewport includes tablet at DPR 2.
  fs.mkdirSync(path.join(__dirname,'artifacts'),{recursive:true});
  for(const [name,width,height]of [['tablet',1704,1136],['tablet-portrait',1136,1704],['phone',390,844],['phone-landscape',844,390],['desktop',1440,900]]){
@@ -53,7 +53,7 @@ const root=path.resolve(__dirname,'..'),old=path.resolve(root,'../../mods/mod-ce
  }
  await page.setViewportSize({width:390,height:844});
  for(const name of ['诊断助手','备份与恢复','本地模组']){await ui.locator('.next-nav').getByRole('button',{name:new RegExp(name)}).click();const metrics=await ui.locator('.next-scroll').evaluate(e=>[e.scrollWidth,e.clientWidth]);assert.ok(metrics[0]<=metrics[1]+2,name+' mobile overflow');}
- await ui.getByRole('button',{name:/本地模组/}).click();
+ await ui.locator('.next-nav').getByRole('button',{name:/本地模组/}).click();
  assert.equal(await page.locator('.dmc-panel,.dmc-shell').count(),0,'classic shell is not mounted');assert.equal(await page.getByRole('button',{name:/经典界面|打开新版界面/}).count(),0);await page.evaluate(()=>DoLModCenter.close());assert.equal(await ui.isVisible(),false);await page.evaluate(()=>DoLModCenter.open());assert.equal(await ui.isVisible(),true);
  await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);await page.keyboard.press('Escape');assert.equal(await ui.isVisible(),false);await page.locator('#dmc-sidebar-button').click();await page.waitForFunction(()=>!document.querySelector('.dmc-next .next-toolbar .primary').disabled);await page.evaluate(()=>document.dispatchEvent(new Event('backbutton',{cancelable:true})));assert.equal(await ui.isVisible(),false);
  assert.deepEqual(errors,[]);console.log('PASS Vue UI + native ZIP import/delete/toggle, keyboard/touch reorder, details, full backup restore, 5 viewports, Vue-only public open/close, Escape/Android back event; no page errors');

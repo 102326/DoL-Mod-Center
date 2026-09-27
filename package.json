@@ -2,6 +2,7 @@
   "name": "dol-mod-center-repository",
   "private": true,
   "scripts": {
+    "test:browser-storage": "node frontend/mod-center/tests/two-page-storage.cjs",
     "test": "node scripts/test.cjs",
     "build": "npm --prefix frontend/mod-center run build",
     "package": "npm --prefix frontend/mod-center run package"

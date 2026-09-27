@@ -4,7 +4,14 @@ const assert=require('node:assert/strict'),path=require('node:path'),fs=require(
  await p.addStyleTag({path:path.join(__dirname,'../dist/ui.css')});await p.addScriptTag({path:path.join(__dirname,'../dist/ui.js')});await p.locator('#dmc-sidebar-button').click();const ui=p.locator('.dmc-next');
  await p.waitForFunction(()=>!document.querySelector('.next-toolbar .primary').disabled);
  const pack=(name,version,deps=[])=>({name:name+'.zip',mimeType:'application/zip',buffer:Buffer.from(JSON.stringify({name,version,dependenceInfo:deps}))});
- await ui.locator('input[type=file]').first().setInputFiles([pack('A','2.0.0'),pack('Extra','1.0.0',[{modName:'Missing',version:'*'},{modName:'GameVersion',version:'=0.5.11.9'}])]);
+ const importFiles=[pack('A','2.0.0'),pack('Extra','1.0.0',[{modName:'Missing',version:'*'},{modName:'GameVersion',version:'=0.5.11.9'}])];
+ const beforeAutoSort=await p.evaluate(async()=>({state:await DMCStorage.create().read(),recovery:await DMCStorage.create().readRecovery()}));
+ await ui.locator('input[type=file]').first().setInputFiles(importFiles);
+ await ui.locator('.next-notice').filter({hasText:'无法自动排序'}).waitFor();
+ assert.equal(await ui.getByRole('alertdialog',{name:'确认配置修改'}).count(),0,'default auto-sort rejects missing dependency before confirmation');
+ assert.deepEqual(await p.evaluate(async()=>({state:await DMCStorage.create().read(),recovery:await DMCStorage.create().readRecovery()})),beforeAutoSort,'default auto-sort failure leaves no write or recovery');
+ await ui.getByLabel('导入 ZIP 时按前置排序').uncheck();
+ await ui.locator('input[type=file]').first().setInputFiles(importFiles);
  await ui.getByRole('alertdialog',{name:'确认配置修改'}).waitFor();assert.match(await ui.locator('.next-confirm').innerText(),/1.0.0 → 2.0.0/);assert.match(await ui.locator('.next-confirm').innerText(),/Missing/);
  await ui.getByRole('button',{name:'确认',exact:true}).click();await p.waitForFunction(async()=>(await DMCStorage.create().read()).packages.includes('Extra'));
  await ui.locator('.next-nav').getByRole('button',{name:/诊断助手/}).click();await ui.getByRole('button',{name:'开始检查',exact:true}).click();await ui.getByText('依赖模组缺失',{exact:true}).waitFor();assert.equal(await ui.locator('#dwb-panel').count(),0,'raw diagnostics lazy');assert.equal(await ui.getByText('游戏版本检查尚未完成',{exact:true}).count(),0);assert.equal(await ui.getByText('游戏版本不符合要求',{exact:true}).count(),0);
