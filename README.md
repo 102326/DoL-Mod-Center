@@ -3,9 +3,9 @@
 [![Latest release](https://img.shields.io/github/v/release/102326/DoL-Mod-Center?label=release)](https://github.com/102326/DoL-Mod-Center/releases/latest)
 [![License](https://img.shields.io/github/license/102326/DoL-Mod-Center)](https://github.com/102326/DoL-Mod-Center/blob/main/LICENSE)
 
-面向 **Degrees of Lewdity ModLoader** 的模组管理器。在本地完成模组整理、运行诊断、配置快照，以及本地模组配置与包体的备份恢复。支持按需联网的 GitHub 模组市场和中文 Wiki 发现目录。
+面向 **Degrees of Lewdity ModLoader** 的模组管理器。在本地完成模组整理、运行诊断、配置快照，以及本地模组配置与包体的备份恢复。当前开发版本聚焦本地模组管理。
 
-> **2.3.0 正式版 · 纯 mod**：无需更换 APK。支持分次添加 ZIP、批量预检、前置排序和启动恢复。目标平板原版 APK 的核心流程已验收；其他设备与模组组合仍需自行核对。
+> **发布调整：2.3.0 已撤回，当前最新公开正式版为 2.2.1。** 当前源码版本为 2.3.1-preview.1，模组市场默认关闭；保留纯 mod 分次添加 ZIP、批量预检、前置排序和启动恢复，尚未重新发布新版。
 
 > [!TIP]
 > 第一次使用前，请先保留游戏存档和重要模组包的独立副本。先看[安装说明](#安装与依赖)和[备份边界](#备份边界)，再导入 ZIP。
@@ -24,33 +24,21 @@
 
 ## 界面预览
 
-以下为 **2.3.0 实际界面的浏览器测试截图**，使用示例仓库与无脚本测试模组，不是收录名单或兼容性承诺。Android 实机验收范围见[验证记录](docs/VALIDATION-2.3.0.md)。
+以下为当前开发版本的浏览器测试截图，使用无脚本测试模组。市场入口默认关闭，用户界面不提供启用开关。
 
 **分次添加 ZIP，勾选后统一预检与排序。**
 
-![待导入列表与依赖排序](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.0/docs/screenshots/import-queue-tablet.png)
-
-**Wiki 目录展示版本、作者与适配原文，可展开查看仓库资料。**
-
-![Wiki 目录与模组详情](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.0/docs/screenshots/wiki-details.png)
-
-**批量安装前先核对来源、包内版本和依赖，确认后才写入。**
-
-![批量安装预览](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.0/docs/screenshots/batch-install-plan.png)
+![待导入列表与依赖排序](https://raw.githubusercontent.com/102326/DoL-Mod-Center/main/docs/screenshots/import-queue-tablet.png)
 
 <details>
 <summary>查看手机布局</summary>
 
-![手机待导入列表](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.0/docs/screenshots/import-queue-phone.png)
+![手机待导入列表](https://raw.githubusercontent.com/102326/DoL-Mod-Center/main/docs/screenshots/import-queue-phone.png)
 
 </details>
 
 ## 功能
 
-- GitHub 模组市场：添加公开仓库，查看最近发布和 ZIP 附件，手动检查版本；下载后复用依赖预检、安装确认与启动恢复点。
-- 默认中文 Wiki 目录：展示作者、模组版本、更新时间和明确的游戏适配原文，支持搜索和分页，成功读取后缓存供离线查看。
-- 目录按当前游戏版本的明确适配声明分组，同组日期从新到旧；未知适配居中、版本声明不符居后。已读取且唯一对应条目的 GitHub 发布时间优先，未读取时以 Wiki 更新日期排序并标明来源。
-- 点击条目展开适配原文、GitHub 发布信息与仓库默认分支 README，无需先订阅或点击刷新发布按钮。再次展开复用本次会话结果，失败时收起再展开重试；README 图片仍需点击才加载。
 - 待导入列表支持反复添加 ZIP、搜索、排序和勾选；一次最多 100 包、256 MiB。未安装列表仅保留在本次页面，确认安装后沿用加载器本地存储。
 - 批量导入本地 ZIP，预检前置与版本，显示同名包的新旧版本；更新保持原启停状态。
 - 启用、停用、删除和导出本地 ZIP；禁用前显示受影响的已启用模组。
@@ -77,26 +65,6 @@
 在“本地模组”中导入你已经取得的 ZIP，确认后再调整启停状态或加载顺序。配置变化通常需要重启游戏才会由加载器应用。详情页只读取包内资料和加载器提供的运行信息，外部链接由你主动点击打开。
 
 日常使用时，导入更新靠启动恢复，大改前导出完整备份，保存常用搭配用配置快照。游戏进度仍需单独导出存档。
-
-### 模组市场
-
-市场内置 [中文 Wiki 模组列表](https://degreesoflewditycn.miraheze.org/wiki/%E6%A8%A1%E7%BB%84%E5%88%97%E8%A1%A8) 作为默认发现目录。点击“刷新 Wiki 目录”通过公开 MediaWiki API 获取条目，显示修订号和缓存时间；页面失败或结构变化时保留上次成功缓存。不会抓取整个站点，也不会批量查询或订阅所有仓库。
-
-目录仅从“模组名称”栏提取仓库，排除工具和游戏载体表；简介中的前置或讨论链接不会当作该模组的仓库。同仓库可对应多个条目，多仓库条目允许玩家自行选择。没有可识别 GitHub 的条目仍显示，下载方式请查看 Wiki 原页。名称和链接用于定位来源，不代表作者认证、安装兼容或安全审核；Wiki 版本信息不代替实际 ZIP 预检。
-
-在“模组市场”填写公开 GitHub 仓库根地址或 `作者/仓库`，点击“添加仓库”。每个仓库可选择最近 20 条发布中的版本与 ZIP 附件，默认不包含预发布；检查更新请点击“刷新版本”。没有 Release ZIP 的源码仓库不能直接安装。
-
-点击“下载并预检”只准备安装，确认页显示来源、附件、包内名称/版本及依赖问题，确认后才写入。下载可以取消，安装会保存启动恢复点；更新沿用原启停状态。不会自动更新、自动下载依赖或改变其他模组顺序。
-
-首次成功安装后，该订阅关联包内模组名称；后续不同名称的附件会被拒绝。当前每个仓库订阅只关联一个模组，尚不提供一仓多模组映射。发布标签与包内版本可能不同，标签差异只作提示，不保证是升级。
-
-仅在添加、刷新或展开仓库详情时查询 GitHub；打开市场本身不会自动联网。最多 30 个仓库，单个附件不超过 128 MiB。下载校验大小；若 GitHub 提供 SHA-256 摘要则必须匹配，没有摘要时会明确提示，并继续执行包结构预检。
-
-**浏览器/WebView 的跨域或网络限制可能阻止直接下载。** 本地 Edge 实测公开仓库 API 可读，但 Release 附件跨域下载被阻止；此时使用“发布说明 / 手动下载”，再从该仓库卡片点击“导入此附件”，继续核对大小和可用摘要，并在安装后关联仓库。没有摘要的手选文件不能证明来源，确认前需核对作者。通用“导入已下载 ZIP”仍是普通本地导入，不关联仓库。不通过未配置的第三方代理绕过，也不承诺所有环境均可一键下载。私有仓库认证、镜像、自定义 JSON 索引与自动更新不在此预览版范围内。
-
-仓库订阅和 Wiki 目录缓存保存在当前游戏页面的本机存储中；两者分别保存，刷新默认目录不会覆盖私人订阅。移除订阅不会卸载模组。仓库列表、关联信息和目录缓存不在完整备份内，迁移设备时需要重新添加或刷新。
-
-备份前先让游戏完成加载，以便加载器确认预载来源。恢复前保留当前配置副本，并确保目标游戏仍提供备份所引用的预载版本。不要让其他管理器同时修改同一份配置。
 
 ## 启动恢复
 
@@ -126,7 +94,7 @@
 
 ## 更新日志
 
-见 [UPDATE.md](https://github.com/102326/DoL-Mod-Center/blob/main/UPDATE.md)。开发者可阅读 [前端构建说明](https://github.com/102326/DoL-Mod-Center/blob/main/frontend/mod-center/README.md)。当前正式版本为 2.3.0；完整记录见发行页面。
+见 [UPDATE.md](https://github.com/102326/DoL-Mod-Center/blob/main/UPDATE.md)。开发者可阅读 [前端构建说明](https://github.com/102326/DoL-Mod-Center/blob/main/frontend/mod-center/README.md)。当前公开正式版为 2.2.1；2.3.0 已撤回，开发版尚未重新发布。
 
 ## 许可与链接
 

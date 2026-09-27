@@ -11,6 +11,7 @@ import {verifyAssetBytes,type RepoSource,type RepoRelease,type ReleaseAsset} fro
 import {downloadMarketBatch,type MarketSelection} from './market-batch';
 import {createInstallPlan,commitPreparedInstall,type InstallPlan,type InstallOutcome} from './install-plan';
 import {runtime,storage,emptyState,download,type State,type ModInfo,type Catalog,type BatchOrderContext} from './bridge';
+import {MARKET_ENABLED} from './internal-features';
 const api=storage(),state=shallowRef<State>(emptyState()),catalog=shallowRef<Catalog>();
 const opened=ref(false),tab=ref('local'),query=ref(''),busy=ref(false),message=ref(''),error=ref(false),changed=ref(false),preloads=ref(false);
 const lastInstall=shallowRef<InstallOutcome>();
@@ -24,7 +25,7 @@ let libraryController:AbortController|undefined;
 let downloadController:AbortController|undefined;
 let manualImport:{source:RepoSource;release:RepoRelease;asset:ReleaseAsset}|undefined;
 const assistant=ref<InstanceType<typeof DiagnosticAssistant>>(), localPage=ref('mods'), rawLogs=ref(false);
-const tabs=[{id:'local',icon:'▦',name:'本地模组',sub:'模组与美化图层'},{id:'market',icon:'⊞',name:'模组市场',sub:'自定义 GitHub 仓库'},{id:'diagnostics',icon:'◎',name:'诊断助手',sub:'检查问题与排查线索'},{id:'backups',icon:'◇',name:'备份与恢复',sub:'启动恢复与配置快照'}];
+const tabs=[{id:'local',icon:'▦',name:'本地模组',sub:'模组与美化图层'},{id:'market',icon:'⊞',name:'模组市场',sub:'自定义 GitHub 仓库'},{id:'diagnostics',icon:'◎',name:'诊断助手',sub:'检查问题与排查线索'},{id:'backups',icon:'◇',name:'备份与恢复',sub:'启动恢复与配置快照'}].filter(t=>MARKET_ENABLED||t.id!=='market');
 const dragMessage=ref('');
 const undoOrder=shallowRef<{token:Catalog;order:string[]}>();let undoTimer:ReturnType<typeof setTimeout>|undefined;
 function clearUndo(){undoOrder.value=undefined;if(undoTimer)clearTimeout(undoTimer);undoTimer=undefined}
@@ -113,9 +114,11 @@ async function prepareBytes(bytes:Uint8Array[],origin='',selections:MarketSelect
   confirm(origin+(selections.length?'模组会执行代码；确认安装即表示你信任这些作者，摘要匹配仅验证附件一致性。\n':'')+'确认后整批写入，同时保存一个启动恢复点。更新包可恢复旧内容；新增包恢复时保留并停用，存档不在恢复范围。',()=>commitPreparedInstall(plan,()=>api.installBatch(token),(key,name)=>marketPanel.value?.bindSource(key,name)??false),plan);
 }
 async function marketInstall(source:RepoSource,release:RepoRelease,asset:ReleaseAsset){
+ if(!MARKET_ENABLED)return;
  await marketInstallBatch([{source,release,asset}]);
 }
 async function marketInstallBatch(selections:MarketSelection[]){
+ if(!MARKET_ENABLED)return;
  if(pending.value||!state.value.writable)return;
  await run(async()=>{
   downloadController=new AbortController();downloading.value=true;downloadProgress.value='';
@@ -129,7 +132,7 @@ async function marketInstallBatch(selections:MarketSelection[]){
  });
 }
 function cancelDownload(){downloadController?.abort()}
-function openImport(source?:RepoSource,release?:RepoRelease,asset?:ReleaseAsset){if(busy.value||pending.value)return;manualImport=source&&release&&asset?{source,release,asset}:undefined;file.value?.click()}
+function openImport(source?:RepoSource,release?:RepoRelease,asset?:ReleaseAsset){if(busy.value||pending.value)return;if(source&&release&&asset&&!MARKET_ENABLED)return;manualImport=source&&release&&asset?{source,release,asset}:undefined;file.value?.click()}
 async function exportZip(p:ModInfo){await run(async()=>{await download(await api.exportZip(p.name),p.name.replace(/[\\/:*?"<>|]/g,'_')+'.zip');notify('已发起 ZIP 导出，请确认系统保存结果。')})}
 async function details(p:ModInfo,loaded=!state.value.packages.includes(p.name)){detail.value={name:p.name,loaded};tab.value='details';await nextTick();if(!detailHost.value)return;detailHost.value.textContent='正在读取…';await run(async()=>{const i=await(loaded?api.loadedDetails(p.name):api.details(p.name));if(detailHost.value)runtime.DMCModInfo.render(detailHost.value,i)})}
 async function sort(){await run(async()=>{const token=await api.catalog(state.value),fixed=new Set(token.preloaded.filter(p=>!token.items.some(i=>i.name===p.name)).map(p=>p.name)),names=token.enabled.filter(n=>!fixed.has(n));
@@ -154,7 +157,7 @@ onBeforeUnmount(()=>{cancelDownload();clearUndo();drag?.destroy();document.remov
 <div v-show="opened" class="dmc-next">
  <span role="status" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">{{dragMessage}}</span>
  <section ref="panel" class="next-window" role="dialog" aria-modal="true" aria-labelledby="next-title" tabindex="-1">
-   <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>模组中心 · 2.3.0</small></div></div>
+   <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>模组中心 · 2.3.1-preview.1</small></div></div>
    <nav aria-label="新版模组中心"><button v-for="t in tabs" :key="t.id" :class="{selected:tab===t.id}" :disabled="busy||!!pending" @click="tab=t.id"><span>{{t.icon}}</span><div>{{t.name}}<small>{{t.sub}}</small></div></button></nav>
   </aside>
   <div class="next-main"><header><div><small class="next-eyebrow">WORKSPACE / {{ tab.toUpperCase() }}</small><h2 id="next-title">{{activeTitle}}</h2></div><button aria-label="关闭模组中心" class="next-close" @click="close">×</button></header>
@@ -166,7 +169,7 @@ onBeforeUnmount(()=>{cancelDownload();clearUndo();drag?.destroy();document.remov
      <h3>{{lastInstall.status==='not-committed'?'整批未提交':lastInstall.status==='unverified'?'已提交 · 待核对':lastInstall.status==='binding-pending'?'已安装 · 关联待修复':'整批安装完成'}}</h3>
      <p>{{lastInstall.message}}</p>
      <ul v-if="lastInstall.items.length"><li v-for="item in lastInstall.items" :key="item.name">{{item.name}} · {{item.version}}<span v-if="item.binding"> · {{item.sourceKey}}：{{item.binding==='saved'?'关联已保存':'关联待修复'}}</span></li></ul>
-     <div class="next-toolbar"><button v-if="lastInstall.status!=='not-committed'" :disabled="busy||!!pending" @click="tab='backups'">查看启动恢复点</button><button v-if="lastInstall.items.some(item=>item.binding==='pending')" :disabled="busy||!!pending" @click="tab='market'">处理来源关联</button><button :disabled="busy||!!pending" @click="lastInstall=undefined">收起结果</button></div>
+     <div class="next-toolbar"><button v-if="lastInstall.status!=='not-committed'" :disabled="busy||!!pending" @click="tab='backups'">查看启动恢复点</button><button v-if="MARKET_ENABLED&&lastInstall.items.some(item=>item.binding==='pending')" :disabled="busy||!!pending" @click="tab='market'">处理来源关联</button><button :disabled="busy||!!pending" @click="lastInstall=undefined">收起结果</button></div>
      <p class="next-help">这是本次操作结果，后续其他操作可能改变当前配置；来源关联与模组恢复点分别保存。</p>
     </section>
     <section v-show="tab==='local'"><div class="next-toolbar"><button :aria-pressed="localPage==='mods'" @click="localPage='mods'">模组列表</button><button :aria-pressed="localPage==='beauty'" @click="localPage='beauty'">美化图层</button></div><LegacyPanel kind="beauty" :api="api" :active="tab==='local'&&localPage==='beauty'&&opened" /><section v-show="localPage==='mods'">
@@ -186,13 +189,13 @@ onBeforeUnmount(()=>{cancelDownload();clearUndo();drag?.destroy();document.remov
      <button class="next-preload" @click="preloads=!preloads" :aria-expanded="preloads">{{preloads?'▾':'▸'}} 游戏预载 · {{builtins.length}} <span>只读</span></button><div v-if="preloads"><article class="next-card" v-for="p in builtins" :key="p.name"><div class="next-card-info"><strong>{{p.name}}</strong><small>{{p.version}}</small></div><button :disabled="busy" @click="details(p,true)">详情</button></article></div>
     </section>
     </section>
-    <MarketPanel v-show="tab==='market'" ref="marketPanel" :active="opened&&tab==='market'" :busy="busy||!!pending" :writable="state.writable" :installed="catalog?.items||[]" :install="marketInstall" :install-batch="marketInstallBatch" @import="openImport()" @manual="openImport" @binding-repaired="bindingRepaired" />
+    <MarketPanel v-if="MARKET_ENABLED" v-show="tab==='market'" ref="marketPanel" :active="opened&&tab==='market'" :busy="busy||!!pending" :writable="state.writable" :installed="catalog?.items||[]" :install="marketInstall" :install-batch="marketInstallBatch" @import="openImport()" @manual="openImport" @binding-repaired="bindingRepaired" />
     <section v-if="tab==='details'"><div class="next-toolbar mc:flex mc:flex-wrap mc:gap-2"><button @click="tab='local'">← 返回列表</button><button v-if="detail&&state.packages.includes(detail.name)&&state.loaded.some(p=>p.name===detail!.name)" :disabled="busy" @click="details({name:detail!.name},!detail!.loaded)">{{detail.loaded?'查看本地包':'查看已挂载包'}}</button></div><p class="next-help">{{detail?.loaded?'本次运行包资料':'本地包资料，下次启动使用'}}</p><article ref="detailHost" class="next-detail" /></section>
     <section v-if="tab==='diagnostics'"><DiagnosticAssistant ref="assistant" :state="state" :catalog="catalog" :busy="busy" @refresh="checkDiagnosis" @inspect="name=>details(info(name))" @recovery="tab='backups'" /><details @toggle="rawLogs=($event.target as HTMLDetailsElement).open"><summary>原始日志与运行环境</summary><LegacyPanel kind="diagnostics" :api="api" :active="rawLogs&&opened" /></details></section>
     <section v-if="tab==='backups'"><p class="next-help">导入更新靠启动恢复，大改前导出完整备份，保存常用搭配用配置快照。游戏进度仍需单独导出存档。</p><LegacyPanel kind="backups" :api="api" :active="tab==='backups'&&opened" /><StartupRecovery ref="recoveryPanel" :api="api" :busy="busy" @changed="run(refresh)" /><details><summary>配置快照（保存常用搭配）</summary><LegacyPanel kind="profiles" :api="api" :active="tab==='backups'&&opened" /></details></section>
    </main>
    <div v-if="undoOrder" class="next-sort-toast" role="status"><span>顺序已保存</span><button :disabled="busy||!!pending" @click="undoSort">撤销排序</button><button aria-label="关闭排序提示" @click="clearUndo">×</button></div>
-   <footer><span>本地管理 · 按需联网</span><span>配置与恢复工作台</span></footer>
+   <footer><span>本地管理 · 离线工作台</span><span>配置与恢复工作台</span></footer>
   </div>
  </section>
 </div>

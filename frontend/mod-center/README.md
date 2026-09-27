@@ -38,6 +38,12 @@ npm run package
 - 管理器界面、共享模块和打包流程各自保持清晰边界；不改游戏存档结构、游戏本体或 APK。
 - 完整备份使用 `full.v2`：不包含存档、游戏本体、内嵌包体、type 数据库或缓存。紧急导出不可直接恢复。
 
+## 内部功能开关
+
+`src/internal-features.ts` 的 `MARKET_ENABLED` 默认为 `false`。关闭时没有市场导航，MarketPanel 不挂载，不初始化订阅与 Wiki 缓存；旧数据不会清除。它不是用户设置，不读取 URL、localStorage 或 window 开关。开发者修改常量后需重新构建。
+
+市场 UI 测试（market.cjs、wiki-market.cjs、batch-market.cjs）仅适用于内部启用市场的构建；默认构建运行 `node frontend/mod-center/tests/market-disabled.cjs`。服务层市场单元测试仍由 `npm test` 覆盖。
+
 ## 测试
 
 根目录 `npm test` 运行隔离的合成测试。需要浏览器验收时，先准备 Microsoft Edge 浏览器并准备本地游戏 HTML fixture：
@@ -49,11 +55,9 @@ node frontend/mod-center/tests/acceptance.cjs
 node frontend/mod-center/tests/shell.cjs
 node frontend/mod-center/tests/panels.cjs
 node frontend/mod-center/tests/market-service.cjs
-node frontend/mod-center/tests/market.cjs
 node frontend/mod-center/tests/wiki-source.cjs
-node frontend/mod-center/tests/wiki-market.cjs
+node frontend/mod-center/tests/market-disabled.cjs
 node frontend/mod-center/tests/local-library-ui.cjs
-node frontend/mod-center/tests/batch-market.cjs
 node frontend/mod-center/tests/two-page-storage.cjs
 ```
 
