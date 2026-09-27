@@ -157,7 +157,7 @@ onBeforeUnmount(()=>{cancelDownload();clearUndo();drag?.destroy();document.remov
 <div v-show="opened" class="dmc-next">
  <span role="status" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">{{dragMessage}}</span>
  <section ref="panel" class="next-window" role="dialog" aria-modal="true" aria-labelledby="next-title" tabindex="-1">
-   <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>模组中心 · 2.3.1-preview.1</small></div></div>
+   <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>模组中心 · 2.3.1</small></div></div>
    <nav aria-label="新版模组中心"><button v-for="t in tabs" :key="t.id" :class="{selected:tab===t.id}" :disabled="busy||!!pending" @click="tab=t.id"><span>{{t.icon}}</span><div>{{t.name}}<small>{{t.sub}}</small></div></button></nav>
   </aside>
   <div class="next-main"><header><div><small class="next-eyebrow">WORKSPACE / {{ tab.toUpperCase() }}</small><h2 id="next-title">{{activeTitle}}</h2></div><button aria-label="关闭模组中心" class="next-close" @click="close">×</button></header>

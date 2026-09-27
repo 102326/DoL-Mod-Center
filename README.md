@@ -3,9 +3,9 @@
 [![Latest release](https://img.shields.io/github/v/release/102326/DoL-Mod-Center?label=release)](https://github.com/102326/DoL-Mod-Center/releases/latest)
 [![License](https://img.shields.io/github/license/102326/DoL-Mod-Center)](https://github.com/102326/DoL-Mod-Center/blob/main/LICENSE)
 
-面向 **Degrees of Lewdity ModLoader** 的模组管理器。在本地完成模组整理、运行诊断、配置快照，以及本地模组配置与包体的备份恢复。当前开发版本聚焦本地模组管理。
+面向 **Degrees of Lewdity ModLoader** 的模组管理器。在本地完成模组整理、运行诊断、配置快照，以及本地模组配置与包体的备份恢复。聚焦本地模组管理。
 
-> **发布调整：2.3.0 已撤回，当前最新公开正式版为 2.2.1。** 当前源码版本为 2.3.1-preview.1，模组市场默认关闭；保留纯 mod 分次添加 ZIP、批量预检、前置排序和启动恢复，尚未重新发布新版。
+> **2.3.1 正式版 · 纯 mod**：无需更换 APK。支持分次添加 ZIP、批量预检、前置排序和启动恢复。模组市场默认关闭，用户界面不提供开关；2.3.0 仍保持撤回。
 
 > [!TIP]
 > 第一次使用前，请先保留游戏存档和重要模组包的独立副本。先看[安装说明](#安装与依赖)和[备份边界](#备份边界)，再导入 ZIP。
@@ -24,16 +24,16 @@
 
 ## 界面预览
 
-以下为当前开发版本的浏览器测试截图，使用无脚本测试模组。市场入口默认关闭，用户界面不提供启用开关。
+以下为 2.3.1 正式版的浏览器测试截图，使用无脚本测试模组。市场入口默认关闭，用户界面不提供启用开关。
 
 **分次添加 ZIP，勾选后统一预检与排序。**
 
-![待导入列表与依赖排序](https://raw.githubusercontent.com/102326/DoL-Mod-Center/main/docs/screenshots/import-queue-tablet.png)
+![待导入列表与依赖排序](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.1/docs/screenshots/import-queue-tablet.png)
 
 <details>
 <summary>查看手机布局</summary>
 
-![手机待导入列表](https://raw.githubusercontent.com/102326/DoL-Mod-Center/main/docs/screenshots/import-queue-phone.png)
+![手机待导入列表](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.1/docs/screenshots/import-queue-phone.png)
 
 </details>
 
@@ -94,7 +94,7 @@
 
 ## 更新日志
 
-见 [UPDATE.md](https://github.com/102326/DoL-Mod-Center/blob/main/UPDATE.md)。开发者可阅读 [前端构建说明](https://github.com/102326/DoL-Mod-Center/blob/main/frontend/mod-center/README.md)。当前公开正式版为 2.2.1；2.3.0 已撤回，开发版尚未重新发布。
+见 [UPDATE.md](https://github.com/102326/DoL-Mod-Center/blob/main/UPDATE.md)。开发者可阅读 [前端构建说明](https://github.com/102326/DoL-Mod-Center/blob/main/frontend/mod-center/README.md)。当前正式版为 2.3.1；2.3.0 已撤回。
 
 ## 许可与链接
 
