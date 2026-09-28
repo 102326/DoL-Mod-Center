@@ -7,6 +7,8 @@
   if (!core || !diag || !sources) return;
   const STORE = 'DoLWorkbench.profiles.v1';
   const runtime = [], seen = new WeakMap();
+  const collectedSince = new Date().toISOString();
+  let dropped = 0, recording = false;
   let panel, body, notice, tabs, observer, timer, mountContainer, jqueryAttached = false;
   let active = 'overview', current, lastReport = '', destroyed = false;
   const events = [], urls = new Set();
@@ -24,9 +26,28 @@
     const b = node('button', text, cls); b.type = 'button'; b.addEventListener('click', action); return b;
   }
   function say(text) { if (notice) notice.textContent = text; }
-  function record(message, source) {
-    runtime.push({level: 'error', message: diag.sanitize(message), source, time: new Date().toISOString()});
-    if (runtime.length > 300) runtime.shift();
+  function detail(value, depth = 0) {
+    try {
+      if (typeof value === 'string') return value.slice(0, 16000).split('\n').slice(0, 100).map(line => clean(line.replace(/(?:file:\/\/|[A-Za-z]:[\\/])[^\s)]*?(?=:\d+:\d+(?:\)|$))/g, '[本地文件]'))).join('\n') + (value.length > 16000 ? '\n[内容已截断]' : '');
+      if (value && typeof value === 'object') {
+        const fields = Object.fromEntries(['stack', 'message', 'cause'].map(key => [key, Object.getOwnPropertyDescriptor(value, key)]));
+        const stack = fields.stack?.value || (value instanceof Error ? value.stack : undefined);
+        if (typeof stack === 'string' || typeof fields.message?.value === 'string') {
+          return detail(stack || fields.message.value) + (depth < 2 && fields.cause && 'value' in fields.cause ? '\n原因：' + detail(fields.cause.value, depth + 1) : '');
+        }
+        return '[结构化参数已省略，避免采集游戏数据]';
+      }
+      return clean(String(value));
+    } catch (_) { return '[参数无法读取]'; }
+  }
+  function record(message, source, level = 'error') {
+    if (destroyed || recording) return;
+    recording = true;
+    try {
+    const text = (Array.isArray(message) ? message.slice(0, 12) : [message]).map(value => detail(value)).join('\n');
+    runtime.push({level, message: diag.sanitize(text), detail: text.slice(0, 16000) + (text.length > 16000 ? '\n[内容已截断]' : ''), source, time: new Date().toISOString()});
+    if (runtime.length > 300) { runtime.shift(); dropped++; }
+    } finally { recording = false; }
   }
   function scan() {
     const passages = document.getElementById('passages');
@@ -92,8 +113,12 @@
       '只收集模组元数据与错误摘要，不读取存档变量；诊断导出前请查看内容。']));
     const report = diag.makeReport({groups, conflicts, mods, notes: safeNotes});
     const advice = result.issues.map(i => [clean(i.title), '证据：' + clean(i.evidence), '建议：' + clean(i.advice)].join('\n')).join('\n\n');
-    lastReport = ('DoL 模组中心 2.1.0\n\n' + advice + '\n\n' + report).slice(0, 80000);
-    return {mods, groups, conflicts, notes: safeNotes, issues: result.issues, incomplete};
+    const logDetails = runtime.slice().reverse().map(entry => '[' + entry.time + '][' + entry.level + '][' + entry.source + ']\n' + entry.detail).join('\n\n');
+    const context = '采集开始：' + collectedSince + '\n加载器：' + clean(root.modUtils?.version || '未知') + '\n浏览器：' + clean(root.navigator?.userAgent || '未知') + '\n日志仅覆盖诊断模块加载后；更早的控制台信息无法补录。已淘汰记录：' + dropped;
+    const changes = (root.DMCJournal?.list?.() || []).slice(-20).map(entry => [entry.time, entry.kind, (entry.names || []).join('、')].map(clean).join(' · ')).join('\n');
+    const fullReport = 'DoL 模组中心诊断\n' + context + '\n\n会话详细日志：\n' + logDetails + '\n\n' + advice + '\n\n' + report + '\n\n最近变更（不代表报错原因）：\n' + changes;
+    lastReport = fullReport.slice(0, 256000) + (fullReport.length > 256000 ? '\n[报告超过容量，后续内容已截断]' : '');
+    return {mods, groups, conflicts, notes: safeNotes, issues: result.issues, incomplete, runtime: runtime.map(entry => ({...entry}))};
   }
   function issueCard(issue) {
     const card = node('article', undefined, 'dwb-card dwb-' + (issue.severity === 'error' ? 'error' : 'warning'));
@@ -150,6 +175,24 @@
     const overlaps = node('details', undefined, 'dwb-card'); overlaps.append(node('summary', '同目标修改（' + current.conflicts.length + '）'));
     overlaps.append(node('p', '这里只列修改重叠，不据此判断冲突或归责。', 'dwb-muted'));
     current.conflicts.forEach(c => overlaps.append(node('p', clean(c.target) + '：' + c.mods.map(clean).join('、')))); body.append(overlaps); notes();
+  }
+  function logsView() {
+    body.append(node('p', '记录 console.warn/error、未处理异常和页面错误。日志按刷新时的状态显示；最多保留最近 300 条。已淘汰 ' + dropped + ' 条。结构化游戏数据不会展开，来源标签不等于责任模组。', 'dwb-muted'));
+    const search = node('input'); search.type = 'search'; search.setAttribute('aria-label', '搜索详细日志'); search.placeholder = '搜索消息、堆栈或来源…';
+    const level = node('select'); level.setAttribute('aria-label', '日志级别');
+    for (const [value, label] of [['', '全部级别'], ['error', '错误'], ['warn', '警告']]) { const option = node('option', label); option.value = value; level.append(option); }
+    const list = node('div');
+    const renderLogs = () => {
+      list.replaceChildren();
+      const entries = current.runtime.filter(entry => (!level.value || entry.level === level.value) && (entry.detail + entry.source).toLowerCase().includes(search.value.toLowerCase()));
+      if (!entries.length) list.append(node('p', '没有匹配记录；没有记录不代表没有发生错误。'));
+      for (const entry of entries.slice().reverse()) {
+        const card = node('details', undefined, 'dwb-card');
+        card.append(node('summary', entry.time + ' · ' + entry.level + ' · ' + entry.source + ' · ' + entry.message.slice(0, 140)));
+        const pre = node('pre', entry.detail); pre.style.whiteSpace = 'pre-wrap'; pre.style.overflowWrap = 'anywhere'; card.append(pre); list.append(card);
+      }
+    };
+    search.addEventListener('input', renderLogs); level.addEventListener('change', renderLogs); body.append(search, level, list); renderLogs();
   }
   function readProfiles() {
     try {
@@ -228,7 +271,7 @@
   function render() {
     body.replaceChildren();
     for (const b of tabs.children) { b.setAttribute('aria-pressed', String(b.dataset.tab === active)); }
-    ({overview, mods: modsView, errors: errorsView, profiles: profilesView}[active])();
+    ({overview, mods: modsView, errors: errorsView, logs: logsView, profiles: profilesView}[active])();
   }
   function select(tab) { active = tab; render(); }
   function mount(container) {
@@ -239,7 +282,7 @@
     title.append(node('span', 'DOL MOD CENTER · 1.0', 'dwb-eyebrow'), h); header.append(title);
     const actions = node('div', undefined, 'dwb-toolbar'); actions.append(button('刷新检查', () => { current = snapshot(); render(); say('检查已刷新。'); }), button('复制报告', copyReport), button('导出报告', () => { current = snapshot(); exportFile(lastReport, 'dol-workbench-report.txt'); }));
     tabs = node('nav', undefined, 'dwb-tabs'); tabs.setAttribute('aria-label', '诊断页面');
-    for (const [id, label] of [['overview', '概览'], ['mods', '运行模组'], ['errors', '诊断'], ['profiles', '运行快照']]) { const b = button(label, () => select(id)); b.dataset.tab = id; tabs.append(b); }
+    for (const [id, label] of [['overview', '概览'], ['mods', '运行模组'], ['errors', '诊断'], ['logs', '详细日志'], ['profiles', '运行快照']]) { const b = button(label, () => select(id)); b.dataset.tab = id; tabs.append(b); }
     notice = node('p', '此页检查与记录环境；模组启停请切换到模组管理。', 'dwb-status'); notice.setAttribute('role', 'status');
     body = node('div', undefined, 'dwb-body'); panel.append(header, actions, tabs, notice, body);
     container.replaceChildren(panel); attachObserver();
@@ -251,7 +294,16 @@
     if (root.jQuery && !jqueryAttached) { root.jQuery(document).on(':passageend.dolWorkbench', attachObserver); jqueryAttached = true; }
   }
   if (document.readyState === 'loading') listen(document, 'DOMContentLoaded', startCollectors, {once: true}); else startCollectors();
-  listen(root, 'error', e => record(e.message || '脚本错误', '运行时'));
+  for (const level of ['warn', 'error']) {
+    const original = root.console?.[level];
+    if (typeof original !== 'function') continue;
+    const wrapped = function (...args) {
+      try { if (!destroyed) record(args, 'console.' + level, level); } catch (_) { /* Logging must not break the caller. */ }
+      return Reflect.apply(original, this, args);
+    };
+    try { root.console[level] = wrapped; events.push(() => { if (root.console[level] === wrapped) root.console[level] = original; }); } catch (_) { /* Host may forbid replacing console methods. */ }
+  }
+  listen(root, 'error', e => record([e.message || '资源或脚本错误', e.error, e.filename ? e.filename + ':' + e.lineno + ':' + e.colno : '', e.target?.tagName ? e.target.tagName + ' ' + (e.target.currentSrc || e.target.src || e.target.href || '') : ''], '运行时'), true);
   listen(root, 'unhandledrejection', e => record(e.reason, '异步运行时'));
   root.dmcMountDiagnostics = function (container = document.getElementById('dmc-diagnostics-host')) {
     if (destroyed || !container || typeof container.append !== 'function') return null;
@@ -259,7 +311,7 @@
     current = snapshot(); render();
     return panel;
   };
-  root.DMCDiagnostics = {snapshot,getReport(){snapshot();return lastReport+'\n\n最近变更（不代表报错原因）：\n'+JSON.stringify(root.DMCJournal?.list?.()||[])+'\n'+(root.DMCJournal?.status?.()||'');},mount: root.dmcMountDiagnostics, refresh() { current = snapshot(); if (panel?.isConnected) render(); }, destroy() {
+  root.DMCDiagnostics = {snapshot,getReport(){snapshot();return lastReport;},mount: root.dmcMountDiagnostics, refresh() { current = snapshot(); if (panel?.isConnected) render(); }, destroy() {
     destroyed = true; observer?.disconnect(); clearTimeout(timer); events.forEach(off => off());
     if (root.jQuery && jqueryAttached) root.jQuery(document).off('.dolWorkbench');
     urls.forEach(url => URL.revokeObjectURL(url)); urls.clear(); panel?.remove(); panel = null; mountContainer = null; delete root.DMCDiagnostics; delete root.dmcMountDiagnostics;

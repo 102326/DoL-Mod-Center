@@ -20,7 +20,8 @@ const panel=ref<HTMLElement>(),list=ref<HTMLElement>(),file=ref<HTMLInputElement
 const detail=ref<{name:string;loaded:boolean}>();const pending=shallowRef<{text:string;action:()=>Promise<unknown>;plan?:InstallPlan}>();
 const recoveryPanel=ref<InstanceType<typeof StartupRecovery>>();
 const marketPanel=ref<InstanceType<typeof MarketPanel>>(),downloading=ref(false),downloadProgress=ref('');
-const libraryOpen=ref(false),libraryReading=ref(false),libraryProgress=ref(''),importAutoSort=ref(true);
+const libraryOpen=ref(false),libraryReading=ref(false),libraryProgress=ref('');
+const libraryPanel=ref<InstanceType<typeof LocalLibrary>>();
 let libraryController:AbortController|undefined;
 let downloadController:AbortController|undefined;
 let manualImport:{source:RepoSource;release:RepoRelease;asset:ReleaseAsset}|undefined;
@@ -77,11 +78,11 @@ async function importFile(e:Event){
  const input=e.target as HTMLInputElement,files=[...(input.files||[])],manual=manualImport;manualImport=undefined;input.value='';if(!files.length)return;
  if(pending.value||!opened.value)return;
  await run(async()=>{
-  if(files.length>100||files.reduce((n,f)=>n+f.size,0)>268435456)throw Error('一次最多 100 包，总大小不超过 256 MiB');
+  if(!manual)throw Error('请通过待导入列表选择 ZIP。');
   if(manual&&(files.length!==1||files[0].size!==manual.asset.size))throw Error('请只选择与当前 Release 附件大小一致的一个 ZIP。');
   const bytes=[];for(const f of files)bytes.push(new Uint8Array(await f.arrayBuffer()));
   if(manual)await verifyAssetBytes(manual.asset,bytes[0]);
-  await refresh();await prepareBytes(bytes,manual?'手动选择附件：'+files[0].name+'\n'+(manual.asset.digest?'附件摘要已匹配 Release。':'Release 未提供摘要，无法验证手动文件来自该仓库，请核对作者来源。')+'\n':'',manual?[manual]:[],undefined,importAutoSort.value);
+  await refresh();await prepareBytes(bytes,'手动选择附件：'+files[0].name+'\n'+(manual.asset.digest?'附件摘要已匹配 Release。':'Release 未提供摘要，无法验证手动文件来自该仓库，请核对作者来源。')+'\n',[manual]);
  });
 }
 function batchOrder(context:BatchOrderContext):{order:string[];warnings:string[]}{
@@ -132,7 +133,7 @@ async function marketInstallBatch(selections:MarketSelection[]){
  });
 }
 function cancelDownload(){downloadController?.abort()}
-function openImport(source?:RepoSource,release?:RepoRelease,asset?:ReleaseAsset){if(busy.value||pending.value)return;if(source&&release&&asset&&!MARKET_ENABLED)return;manualImport=source&&release&&asset?{source,release,asset}:undefined;file.value?.click()}
+async function openImport(source?:RepoSource,release?:RepoRelease,asset?:ReleaseAsset){if(busy.value||pending.value)return;if(source&&release&&asset&&!MARKET_ENABLED)return;if(source&&release&&asset){manualImport={source,release,asset};file.value?.click();return}libraryOpen.value=true;tab.value='local';localPage.value='mods';await nextTick();libraryPanel.value?.openInput()}
 async function exportZip(p:ModInfo){await run(async()=>{await download(await api.exportZip(p.name),p.name.replace(/[\\/:*?"<>|]/g,'_')+'.zip');notify('已发起 ZIP 导出，请确认系统保存结果。')})}
 async function details(p:ModInfo,loaded=!state.value.packages.includes(p.name)){detail.value={name:p.name,loaded};tab.value='details';await nextTick();if(!detailHost.value)return;detailHost.value.textContent='正在读取…';await run(async()=>{const i=await(loaded?api.loadedDetails(p.name):api.details(p.name));if(detailHost.value)runtime.DMCModInfo.render(detailHost.value,i)})}
 async function sort(){await run(async()=>{const token=await api.catalog(state.value),fixed=new Set(token.preloaded.filter(p=>!token.items.some(i=>i.name===p.name)).map(p=>p.name)),names=token.enabled.filter(n=>!fixed.has(n));
@@ -157,13 +158,13 @@ onBeforeUnmount(()=>{cancelDownload();clearUndo();drag?.destroy();document.remov
 <div v-show="opened" class="dmc-next">
  <span role="status" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">{{dragMessage}}</span>
  <section ref="panel" class="next-window" role="dialog" aria-modal="true" aria-labelledby="next-title" tabindex="-1">
-   <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>模组中心 · 2.3.1</small></div></div>
+   <aside class="next-nav"><div class="next-brand"><span class="next-logo">◈</span><div><strong>MOD CENTER</strong><small>模组中心 · 2.3.2</small></div></div>
    <nav aria-label="新版模组中心"><button v-for="t in tabs" :key="t.id" :class="{selected:tab===t.id}" :disabled="busy||!!pending" @click="tab=t.id"><span>{{t.icon}}</span><div>{{t.name}}<small>{{t.sub}}</small></div></button></nav>
   </aside>
   <div class="next-main"><header><div><small class="next-eyebrow">WORKSPACE / {{ tab.toUpperCase() }}</small><h2 id="next-title">{{activeTitle}}</h2></div><button aria-label="关闭模组中心" class="next-close" @click="close">×</button></header>
    <div v-if="busy||message||changed" class="next-notice" role="status" :class="{failure:error}">{{busy?'正在处理，请稍候…':message}}<span v-if="changed">{{busy||message?' · ':''}}更改需重启</span></div>
    <div v-if="downloading" class="next-notice" role="status">正在下载 {{downloadProgress}} <button @click="cancelDownload">取消下载</button></div>
-   <div v-if="pending" class="next-confirm" role="alertdialog" aria-label="确认配置修改"><InstallReview v-if="pending.plan" :plan="pending.plan" /><p>{{pending.text}}</p><button @click="accept">确认</button><button @click="cancelPending">取消</button></div>
+   <div v-if="pending" class="next-confirm" role="alertdialog" aria-label="确认配置修改"><div class="next-confirm-content"><InstallReview v-if="pending.plan" :plan="pending.plan" /><p>{{pending.text}}</p></div><div class="next-confirm-actions"><button @click="accept">确认</button><button @click="cancelPending">取消</button></div></div>
    <main class="next-scroll dmc-content">
     <section v-if="lastInstall" class="install-result" aria-label="本次安装结果" role="status">
      <h3>{{lastInstall.status==='not-committed'?'整批未提交':lastInstall.status==='unverified'?'已提交 · 待核对':lastInstall.status==='binding-pending'?'已安装 · 关联待修复':'整批安装完成'}}</h3>
@@ -174,9 +175,9 @@ onBeforeUnmount(()=>{cancelDownload();clearUndo();drag?.destroy();document.remov
     </section>
     <section v-show="tab==='local'"><div class="next-toolbar"><button :aria-pressed="localPage==='mods'" @click="localPage='mods'">模组列表</button><button :aria-pressed="localPage==='beauty'" @click="localPage='beauty'">美化图层</button></div><LegacyPanel kind="beauty" :api="api" :active="tab==='local'&&localPage==='beauty'&&opened" /><section v-show="localPage==='mods'">
      <div class="next-overview"><div><small>本地包</small><strong>{{state.packages.length}}</strong></div><div><small>下次启用</small><strong>{{state.enabled.length}}</strong></div><div><small>当前挂载</small><strong>{{state.loaded.length}}</strong></div><div><small>缺失引用</small><strong :class="{danger:state.missing.length}">{{state.missing.length}}</strong></div></div>
-     <div class="next-toolbar mc:flex mc:flex-wrap mc:gap-2"><input v-model="query" type="search" aria-label="搜索模组" placeholder="搜索模组名称或版本…"><button class="primary" :disabled="busy||!!pending||!state.writable" @click="openImport()">＋ 导入 ZIP</button><button :disabled="busy||!!pending" @click="run(refresh)">刷新</button><button :disabled="busy||!!pending||!state.writable" @click="sort">按前置排序</button><button :disabled="busy||!!pending" @click="confirm('已保存游戏？确认重启游戏？',async()=>{runtime.location.reload()})">重启</button><input ref="file" type="file" accept=".zip" multiple hidden @change="importFile" @cancel="manualImport=undefined"></div>
-     <div class="next-toolbar"><button :disabled="busy||!!pending" :aria-expanded="libraryOpen" @click="libraryOpen=!libraryOpen">待导入列表</button><label><input v-model="importAutoSort" type="checkbox" :disabled="busy||!!pending">导入 ZIP 时按前置排序</label></div>
-     <LocalLibrary :active="libraryOpen&&opened&&tab==='local'&&localPage==='mods'" :busy="busy||!!pending" :reading="libraryReading" :progress="libraryProgress" @select="importLibrary" @cancel="libraryController?.abort()" />
+     <div class="next-toolbar mc:flex mc:flex-wrap mc:gap-2"><input v-model="query" type="search" aria-label="搜索模组" placeholder="搜索模组名称或版本…"><button class="primary" :disabled="busy||!!pending||!state.writable" @click="openImport()">＋ 添加 ZIP</button><button :disabled="busy||!!pending" @click="run(refresh)">刷新</button><button :disabled="busy||!!pending||!state.writable" @click="sort">按前置排序</button><button :disabled="busy||!!pending" @click="confirm('已保存游戏？确认重启游戏？',async()=>{runtime.location.reload()})">重启</button><input ref="file" type="file" accept=".zip" hidden @change="importFile" @cancel="manualImport=undefined"></div>
+     <div class="next-toolbar"><button :disabled="busy||!!pending" :aria-expanded="libraryOpen" @click="libraryOpen=!libraryOpen">待导入列表</button></div>
+     <LocalLibrary ref="libraryPanel" :active="libraryOpen&&opened&&tab==='local'&&localPage==='mods'" :busy="busy||!!pending" :reading="libraryReading" :progress="libraryProgress" @select="importLibrary" @cancel="libraryController?.abort()" />
      <p class="next-help">拖动手柄，松手保存顺序。启用状态用于下次启动，挂载状态代表当前会话。</p>
      <p v-if="state.reason" class="next-error">{{state.reason}}</p><p v-if="state.missing.length" class="next-error">缺少包体：{{state.missing.join('、')}}</p>
      <h3>额外模组 <span>{{enabled.length+other.length}}</span></h3>

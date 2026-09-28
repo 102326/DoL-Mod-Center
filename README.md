@@ -5,7 +5,7 @@
 
 面向 **Degrees of Lewdity ModLoader** 的模组管理器。在本地完成模组整理、运行诊断、配置快照，以及本地模组配置与包体的备份恢复。聚焦本地模组管理。
 
-> **2.3.1 正式版 · 纯 mod**：无需更换 APK。支持分次添加 ZIP、批量预检、前置排序和启动恢复。
+> **2.3.2 正式版 · 纯 mod**：无需更换 APK。新增详细错误日志，优化统一导入、安装计划与启动恢复确认。
 
 > [!TIP]
 > 第一次使用前，请先保留游戏存档和重要模组包的独立副本。先看[安装说明](#安装与依赖)和[备份边界](#备份边界)，再导入 ZIP。
@@ -24,20 +24,24 @@
 
 ## 界面预览
 
-以下为 2.3.1 正式版的浏览器测试截图，使用无脚本测试模组。
+以下为 2.3.2 正式版的浏览器测试截图，使用无脚本测试模组。
 
 **分次添加 ZIP，勾选后统一预检与排序。**
 
-![待导入列表与依赖排序](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.1/docs/screenshots/import-queue-tablet.png)
+![待导入列表与依赖排序](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.2/docs/screenshots/import-queue-tablet.png)
 
 <details>
 <summary>查看手机布局</summary>
 
-![手机待导入列表](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.1/docs/screenshots/import-queue-phone.png)
+![手机待导入列表](https://raw.githubusercontent.com/102326/DoL-Mod-Center/v2.3.2/docs/screenshots/import-queue-phone.png)
 
 </details>
 
 ## 功能
+
+- 详细日志保留控制台警告/错误、异常堆栈、嵌套原因与行列号，可搜索、筛选并导出报告。日志仅覆盖管理器加载后的本次会话，保留最近 300 条；常见敏感字段和本地路径脱敏，超出容量会截断。
+
+查看路径：**诊断助手 → 原始日志与运行环境 → 详细日志**。复现问题后点击“刷新检查”，再复制或导出报告；分享前请检查内容。
 
 - 待导入列表支持反复添加 ZIP、搜索、排序和勾选；一次最多 100 包、256 MiB。未安装列表仅保留在本次页面，确认安装后沿用加载器本地存储。
 - 批量导入本地 ZIP，预检前置与版本，显示同名包的新旧版本；更新保持原启停状态。
@@ -94,7 +98,7 @@
 
 ## 更新日志
 
-见 [UPDATE.md](https://github.com/102326/DoL-Mod-Center/blob/main/UPDATE.md)。开发者可阅读 [前端构建说明](https://github.com/102326/DoL-Mod-Center/blob/main/frontend/mod-center/README.md)。当前正式版为 2.3.1。
+见 [UPDATE.md](https://github.com/102326/DoL-Mod-Center/blob/main/UPDATE.md)。开发者可阅读 [前端构建说明](https://github.com/102326/DoL-Mod-Center/blob/main/frontend/mod-center/README.md)。当前正式版为 2.3.2。
 
 ## 许可与链接
 

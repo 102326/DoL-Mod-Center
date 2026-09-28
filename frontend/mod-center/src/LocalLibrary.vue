@@ -13,6 +13,7 @@ const total=computed(()=>files.value.reduce((sum,file)=>sum+file.size,0));
 const pickedTotal=computed(()=>picked.value.reduce((sum,file)=>sum+file.size,0));
 watch(()=>props.active,active=>{if(!active){query.value='';selected.value=[];notice.value=''}});
 function openInput(){if(!locked.value)input.value?.click()}
+defineExpose({openInput});
 function addFiles(event:Event){
  const target=event.target as HTMLInputElement;
  const incoming=[...(target.files||[])];
@@ -50,6 +51,7 @@ function submit(){if(locked.value||!props.active)return;try{validateSelection(pi
   <ul v-if="matches.length"><li v-for="file in matches" :key="file.id"><label><input type="checkbox" :checked="selected.includes(file.id)" :disabled="locked" @change="toggle(file.id)"><span>{{file.name}}<small>{{(file.size/1048576).toFixed(2)}} MiB · {{file.modified?new Date(file.modified).toLocaleString():'修改时间未提供'}}</small></span></label></li></ul>
   <p v-else>{{files.length?'没有符合条件的 ZIP 文件。':'还没有选择 ZIP。'}}</p>
   <p>列表 {{files.length}} / 100 个 · {{(total/1048576).toFixed(2)}} / 256 MiB；已选 {{picked.length}} 个 · {{(pickedTotal/1048576).toFixed(2)}} MiB</p>
+  <p class="next-help">每批最多 100 个、合计 256 MiB：导入会先将整批读入内存，并在一次事务中保存恢复点。超过时请分批安装并在每批重启核对后确认保留。</p>
   <label><input v-model="autoSort" type="checkbox" :disabled="locked">预检时按前置依赖整理加载顺序</label>
   <div class="next-toolbar"><button :disabled="locked||!selected.length" @click="submit">预检所选 ZIP</button><button v-if="props.reading" @click="emit('cancel')">取消读取</button></div>
  </section>

@@ -6,11 +6,12 @@
  const button=(text,action)=>{const n=el('button',text);n.type='button';n.onclick=action;return n;};
  async function run(action){if(working)return;working=true;try{await action();}catch(e){notice.textContent=String(e.message||e);}finally{working=false;}}
  function render(){
-  host.replaceChildren();notice=el('p',observedError?'本次会话检测到错误。它不一定由上次导入造成，可检查恢复点。':'上次模组导入尚待验证。游戏正常时，可在备份与恢复中确认保留配置。');host.append(notice);
+  host.replaceChildren();notice=el('p',observedError?'本次会话检测到错误，尚不能判断是否由上次导入造成。请检查后选择恢复或保留。':'上次导入后已重新打开游戏。若游戏看起来正常，可以保留当前配置；这不是完整兼容性验证。');host.append(notice);
   host.append(button('检查启动恢复',()=>run(async()=>{
    token=await api.prepareRecovery();host.replaceChildren();notice=el('p','恢复更新前的模组包与配置？新增包保留并停用，不恢复存档。之后需手动重启。');host.append(notice);
    host.append(button('确认恢复模组配置',()=>run(async()=>{await api.rollbackRecovery(token);token=undefined;host.replaceChildren(el('p','模组配置已恢复，请手动重启游戏。'),button('关闭',()=>host.remove()));})),button('取消',()=>{if(!working){token=undefined;render();}}));
-  })),button('稍后处理',()=>{if(!working)host.remove();}));
+  })),button('保留当前配置',()=>run(async()=>{await api.dismissRecovery(record.id);record=undefined;host.remove();host=undefined;})),button('稍后处理',()=>{if(!working)host.remove();}));
+  host.append(el('small','选择保留会释放本次导入的旧恢复点；不会修改当前模组或存档。'));
  }
  async function start(){
   if(destroyed||host||!root.DMCStorage)return;

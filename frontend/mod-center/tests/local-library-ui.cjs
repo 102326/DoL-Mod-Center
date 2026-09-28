@@ -81,7 +81,16 @@ async function packageBytes(name, deps = []) {
   await firstPlan.waitFor();
   assert.match(await firstPlan.textContent(), /Base/);
   assert.match(await firstPlan.textContent(), /Addon/);
-  assert.equal(await firstPlan.getByText('Base → Addon', {exact: true}).count(), 1, 'preview shows dependency order');
+  assert.equal(await firstPlan.locator('details[open]').count(), 0, 'plan details start collapsed');
+  fs.mkdirSync(artifacts, {recursive: true});
+  for (const [name, width, height] of [['tablet', 1704, 1136], ['phone', 390, 844]]) {
+    await page.setViewportSize({width, height});
+    assert.ok(await firstPlan.getByRole('button', {name: '确认', exact: true}).isVisible(), `${name} confirmation remains reachable`);
+    await page.screenshot({path: path.join(artifacts, `${name}-plan.png`), fullPage: true});
+  }
+  await page.setViewportSize({width: 1704, height: 1136});
+  await firstPlan.getByText(/查看调整后的加载顺序/).click();
+  assert.deepEqual(await firstPlan.locator('ol li').allTextContents(), ['Base', 'Addon'], 'preview shows dependency order');
   await firstPlan.getByRole('button', {name: '取消', exact: true}).click();
   assert.deepEqual(await page.evaluate(async () => (await DMCStorage.create().read()).packages), []);
 

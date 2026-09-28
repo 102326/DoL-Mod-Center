@@ -57,3 +57,4 @@
 @keyframes mc-glass-sweep{from{opacity:0;transform:translateX(-20%)}to{opacity:1;transform:translateX(0)}}
 @media(max-width:600px){.dmc-next .next-sort-toast{right:16px;bottom:max(20px,env(safe-area-inset-bottom));gap:8px;padding:8px 10px 8px 14px}}
 @media(prefers-reduced-motion:reduce){.dmc-next button,.dmc-next .next-sort-toast,.dmc-drag-ghost,.dmc-drag-ghost::after{animation:none!important;transition:none!important}.dmc-next button:active:not(:disabled){transform:none}.dmc-drag-ghost,.dmc-next .next-sort-toast{backdrop-filter:none!important}}
+.dmc-next .next-confirm{max-height:32%;display:flex;flex-direction:column;overflow:hidden}.dmc-next .next-confirm-content{min-height:0;overflow:auto}.dmc-next .next-confirm-actions{flex-shrink:0;display:flex;gap:8px;padding-top:8px;background:#302d40}

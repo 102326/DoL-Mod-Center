@@ -38,5 +38,14 @@ const assert=require('node:assert/strict'),path=require('node:path'),{pathToFile
   const plan=await api.prepareInstallBatch(await api.read(),[f.pack('PostRace')]);await race(()=>api.installBatch(plan));await api.dismissRecovery((await api.readRecovery()).id);
   await api.installBatch(await api.prepareInstallBatch(await api.read(),[f.pack('PostRace','2')]));const rollback=await api.prepareRecovery();await race(()=>api.rollbackRecovery(rollback));
  });
- await page.evaluate(()=>{DMCStartupRecovery.destroy();return __fixture.cleanup()});console.log('PASS recovery boundaries '+count+' storage cases + cross-session prompt, error/cancel no writes, explicit recovery');
+ await page.evaluate(()=>DMCStartupRecovery.destroy());
+ await page.evaluate(async()=>{const api=DMCStorage.create(),old=await api.readRecovery();if(old)await api.dismissRecovery(old.id);await api.installBatch(await api.prepareInstallBatch(await api.read(),[__fixture.pack('KeepMe')]));});
+ await page.addScriptTag({path:path.join(__dirname,'../src/storage.js')});
+ await page.addScriptTag({path:path.join(__dirname,'../src/startup-recovery.js')});
+ await page.locator('#dmc-startup-recovery').waitFor();
+ const beforeKeep=await page.evaluate(async()=>JSON.stringify(await DMCStorage.create().read()));
+ await page.getByRole('button',{name:'保留当前配置',exact:true}).click();
+ await page.waitForFunction(async()=>!(await DMCStorage.create().readRecovery()));
+ assert.equal(await page.evaluate(async()=>JSON.stringify(await DMCStorage.create().read())),beforeKeep,'keep only releases recovery point');
+ await page.evaluate(()=>{DMCStartupRecovery.destroy();return __fixture.cleanup()});console.log('PASS recovery boundaries '+count+' storage cases + cross-session prompt, error/cancel no writes, explicit recovery and keep');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
